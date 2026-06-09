@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+dist
+public/renders/*.mp4
+public/renders/*.webm
+.render-props
+tsconfig.tsbuildinfo
+.env
+.env.local
+.env.*.local
+!.env.example
+.DS_Store

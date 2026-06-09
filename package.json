@@ -1,0 +1,31 @@
+{
+  "name": "guided-text-video-agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3010",
+    "build": "next build",
+    "start": "next start -p 3010",
+    "typecheck": "tsc --noEmit",
+    "remotion:studio": "remotion studio remotion/index.ts",
+    "remotion:render": "remotion render remotion/index.ts TextMixComposition public/renders/text-mix.mp4 --concurrency=1"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.300",
+    "@remotion/cli": "^4.0.300",
+    "@remotion/player": "4.0.300",
+    "@remotion/renderer": "4.0.300",
+    "lucide-react": "^0.468.0",
+    "next": "^14.2.33",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "4.0.300",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "typescript": "^5.9.3"
+  }
+}
