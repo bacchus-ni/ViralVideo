@@ -14,13 +14,23 @@ import { fontMap } from "./theme";
 const easeOut = Easing.bezier(0.16, 1, 0.3, 1);
 const backOut = Easing.bezier(0.34, 1.56, 0.64, 1);
 
+const monotonicInputRange = (input: number[]) => {
+  let previous = Number.NEGATIVE_INFINITY;
+  return input.map((value) => {
+    const safeValue = Number.isFinite(value) ? value : 0;
+    const next = safeValue > previous ? safeValue : previous + 0.001;
+    previous = next;
+    return next;
+  });
+};
+
 const clamp = (
   frame: number,
   input: number[],
   output: number[],
   easing = easeOut,
 ) =>
-  interpolate(frame, input, output, {
+  interpolate(frame, monotonicInputRange(input), output, {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing,
@@ -525,8 +535,12 @@ const LogoHoldScene: React.FC<SceneProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const foreground = resolveForeground(slot, styleOptions);
-  const opacity = clamp(frame, [0, 14, Math.max(15, durationFrames - 28), durationFrames], [0, 1, 1, 0]);
-  const scale = clamp(frame, [0, Math.max(18, durationFrames * 0.3), durationFrames], [0.92, 1.02, 0.96]);
+  const fadeFrames = Math.max(2, Math.min(14, durationFrames * 0.28));
+  const holdStart = Math.min(durationFrames - 0.002, fadeFrames);
+  const holdEnd = Math.max(holdStart + 0.001, durationFrames - fadeFrames);
+  const opacity = clamp(frame, [0, holdStart, holdEnd, durationFrames], [0, 1, 1, 0]);
+  const scalePeak = Math.min(durationFrames - 0.001, Math.max(2, durationFrames * 0.3));
+  const scale = clamp(frame, [0, scalePeak, durationFrames], [0.92, 1.02, 0.96]);
   const lines = splitText(text, 7);
 
   return (
