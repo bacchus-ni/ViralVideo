@@ -26,6 +26,7 @@ type AnalyzeResponse = {
     style?: Partial<StyleOptions>;
     advancedTemplate?: AdvancedTemplateSpec;
     advancedSummary?: string;
+    extractedAudioUrl?: string;
   };
   error?: string;
 };
@@ -33,6 +34,7 @@ type AnalyzeResponse = {
 const templateStorageId = () => `custom-template-${Date.now()}`;
 const analyzeSteps = [
   "读取 demo 视频",
+  "抽取 demo 原音频",
   "上传给千问多模态模型",
   "识别镜头、转场和文字动画",
   "整理 Remotion 高级模板结构",
@@ -61,6 +63,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   const [style, setStyle] = useState<StyleOptions>(baseStyle);
   const [advancedTemplate, setAdvancedTemplate] = useState<AdvancedTemplateSpec>();
   const [advancedSummary, setAdvancedSummary] = useState<string>();
+  const [extractedAudioUrl, setExtractedAudioUrl] = useState<string>();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeProgress, setAnalyzeProgress] = useState(0);
   const [analyzeStepIndex, setAnalyzeStepIndex] = useState(0);
@@ -73,7 +76,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
       setAnalyzeProgress((current) => {
         const next = Math.min(92, current + (current < 45 ? 8 : current < 76 ? 4 : 1.6));
         setAnalyzeStepIndex(
-          next < 28 ? 0 : next < 55 ? 1 : next < 82 ? 2 : 3,
+          next < 18 ? 0 : next < 38 ? 1 : next < 62 ? 2 : next < 84 ? 3 : 4,
         );
         return next;
       });
@@ -144,9 +147,14 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
       updateStyle(payload.template.style ?? {});
       setAdvancedTemplate(payload.template.advancedTemplate);
       setAdvancedSummary(payload.template.advancedSummary);
+      setExtractedAudioUrl(payload.template.extractedAudioUrl);
       setAnalyzeProgress(100);
       setAnalyzeStepIndex(3);
-      setMessage("已根据视频生成模板草稿，可继续微调后保存。");
+      setMessage(
+        payload.template.extractedAudioUrl
+          ? "已根据视频生成模板草稿，并自动提取 demo 音频作为默认背景音乐。"
+          : "已根据视频生成模板草稿，可继续微调后保存。",
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "解析视频失败");
     } finally {
@@ -263,6 +271,11 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
               </div>
             ) : null}
             {message ? <p className="manager-message">{message}</p> : null}
+            {extractedAudioUrl ? (
+              <p className="manager-audio-note">
+                demo 原音频已保存为该模板的默认背景音乐。
+              </p>
+            ) : null}
             {advancedTemplate ? (
               <div className="advanced-structure-summary">
                 <strong>已解析高级结构</strong>

@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import { execFile } from "child_process";
+import { mkdir, unlink, writeFile } from "fs/promises";
+import path from "path";
+import { promisify } from "util";
 import { styleOptionsSchema } from "@/lib/schemas";
 import {
   normalizeAdvancedTemplate,
@@ -8,6 +12,8 @@ import { getPalettePreset } from "@/lib/style-presets";
 import { defaultPlan } from "@/lib/templates";
 
 export const runtime = "nodejs";
+
+const execFileAsync = promisify(execFile);
 
 type QwenResponse = {
   choices?: Array<{
@@ -26,6 +32,75 @@ const extractJson = (value: string) => {
   const match = trimmed.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("千问返回内容中没有 JSON。");
   return match[0];
+};
+
+const safeExtension = (mimeType: string) => {
+  if (mimeType.includes("quicktime")) return "mov";
+  if (mimeType.includes("webm")) return "webm";
+  if (mimeType.includes("x-matroska")) return "mkv";
+  return "mp4";
+};
+
+const extractAudioFromDemoVideo = async (
+  videoBytes: Buffer,
+  mimeType: string,
+) => {
+  const id = `demo-audio-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const uploadDir = path.join(process.cwd(), ".uploads", "template-videos");
+  const audioDir = path.join(process.cwd(), "public", "music", "template-audio");
+  const inputPath = path.join(uploadDir, `${id}.${safeExtension(mimeType)}`);
+  const outputFilename = `${id}.mp4`;
+  const outputPath = path.join(audioDir, outputFilename);
+  const remotionBin = path.join(process.cwd(), "node_modules", ".bin", "remotion");
+
+  await mkdir(uploadDir, { recursive: true });
+  await mkdir(audioDir, { recursive: true });
+  await writeFile(inputPath, videoBytes);
+
+  const ffmpegArgs = [
+    "-y",
+    "-i",
+    inputPath,
+    "-vn",
+    "-map",
+    "0:a:0?",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-movflags",
+    "+faststart",
+    outputPath,
+  ];
+
+  try {
+    try {
+      await execFileAsync(
+        remotionBin,
+        ["ffmpeg", ...ffmpegArgs],
+        {
+          cwd: process.cwd(),
+          timeout: 90 * 1000,
+          maxBuffer: 1024 * 1024 * 8,
+        },
+      );
+    } catch {
+      await execFileAsync("ffmpeg", ffmpegArgs, {
+        cwd: process.cwd(),
+        timeout: 90 * 1000,
+        maxBuffer: 1024 * 1024 * 8,
+      });
+    }
+
+    return {
+      url: `/music/template-audio/${outputFilename}`,
+      volume: 0.22,
+    };
+  } catch {
+    return undefined;
+  } finally {
+    await unlink(inputPath).catch(() => undefined);
+  }
 };
 
 const systemPrompt = `你是一个短视频模板拆解师。
@@ -119,6 +194,10 @@ export async function POST(request: Request) {
         ? styleOptionsSchema.partial().parse(JSON.parse(baseStyleRaw))
         : defaultPlan.style;
     const bytes = Buffer.from(await file.arrayBuffer());
+    const extractedAudio = await extractAudioFromDemoVideo(
+      bytes,
+      file.type || "video/mp4",
+    );
     const videoUrl = `data:${file.type || "video/mp4"};base64,${bytes.toString("base64")}`;
     const baseURL =
       process.env.QWEN_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1";
@@ -179,6 +258,9 @@ export async function POST(request: Request) {
         ...defaultPlan.style,
         ...baseStyle,
         ...style,
+        musicUrl: extractedAudio?.url ?? style.musicUrl ?? baseStyle.musicUrl,
+        musicVolume:
+          extractedAudio?.volume ?? style.musicVolume ?? baseStyle.musicVolume,
         colors: {
           ...defaultPlan.style.colors,
           ...(baseStyle.colors ?? {}),
@@ -199,9 +281,21 @@ export async function POST(request: Request) {
         ...(advancedTemplate.style?.colors ?? {}),
       },
       aspectRatio: advancedTemplate.aspectRatio,
-      musicUrl: style.musicUrl ?? baseStyle.musicUrl,
-      musicVolume: style.musicVolume ?? baseStyle.musicVolume ?? 0.2,
+      musicUrl: extractedAudio?.url ?? style.musicUrl ?? baseStyle.musicUrl,
+      musicVolume:
+        extractedAudio?.volume ?? style.musicVolume ?? baseStyle.musicVolume ?? 0.2,
     });
+    const templateWithAudio = {
+      ...advancedTemplate,
+      audio:
+        extractedAudio?.url
+          ? {
+              url: extractedAudio.url,
+              volume: extractedAudio.volume,
+              loop: true,
+            }
+          : advancedTemplate.audio,
+    };
 
     return NextResponse.json({
       template: {
@@ -209,8 +303,9 @@ export async function POST(request: Request) {
         description: parsed.description || "从 demo 视频解析生成",
         promptHint: parsed.promptHint || "参考 demo 视频的节奏、配色和文字风格。",
         style: mergedStyle,
-        advancedTemplate,
-        advancedSummary: summarizeAdvancedTemplate(advancedTemplate),
+        advancedTemplate: templateWithAudio,
+        advancedSummary: summarizeAdvancedTemplate(templateWithAudio),
+        extractedAudioUrl: extractedAudio?.url,
       },
     });
   } catch (error) {

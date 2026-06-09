@@ -4,6 +4,8 @@ out
 dist
 public/renders/*.mp4
 public/renders/*.webm
+public/music/template-audio/
+.uploads/
 .render-props
 tsconfig.tsbuildinfo
 .env
