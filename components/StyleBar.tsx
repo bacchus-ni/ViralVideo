@@ -54,7 +54,7 @@ const summary = {
       ? "自定义"
       : palettePresets.find((preset) => preset.id === style.palette)?.name ?? "配色",
   font: (style: StyleOptions) =>
-    `${fontOptions.find((font) => font.value === style.fontFamily)?.label ?? "字体"} ${style.fontSize}px`,
+    `${fontOptions.find((font) => font.value === style.fontFamily)?.label ?? "字体"} · ${style.fontSize}px`,
   background: (style: StyleOptions) =>
     style.backgroundImageUrl
       ? "上传图片"
@@ -253,7 +253,7 @@ export const StyleBar: React.FC<StyleBarProps> = ({ value, onChange }) => {
                   ))}
                 </div>
                 <label className="settings-field">
-                  <span>字号 {value.fontSize}px</span>
+                  <span>整体大小 {value.fontSize}px</span>
                   <input
                     type="range"
                     min={72}

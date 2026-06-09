@@ -1,13 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GeneratedPlanCard } from "@/components/GeneratedPlanCard";
 import { PhonePreview } from "@/components/PhonePreview";
 import { PromptComposer } from "@/components/PromptComposer";
 import { StyleBar } from "@/components/StyleBar";
+import { TemplateManagerModal } from "@/components/TemplateManagerModal";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import type { StyleOptions, VideoPlan } from "@/lib/schemas";
-import { buildFallbackPlan, defaultPlan, getTemplateById, templates } from "@/lib/templates";
+import {
+  buildFallbackPlan,
+  defaultPlan,
+  getTemplateById,
+  templates,
+  type TemplatePreset,
+} from "@/lib/templates";
 
 type GenerateResponse = {
   plan: VideoPlan;
@@ -25,7 +32,22 @@ type RenderResponse = {
   error?: string;
 };
 
+const customTemplateStorageKey = "textMixCustomTemplates";
+
+const readCustomTemplates = () => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(customTemplateStorageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as TemplatePreset[]) : [];
+  } catch {
+    return [];
+  }
+};
+
 export const StudioApp: React.FC = () => {
+  const [customTemplates, setCustomTemplates] = useState<TemplatePreset[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState(defaultPlan.templateId);
   const [style, setStyle] = useState<StyleOptions>(defaultPlan.style);
   const [prompt, setPrompt] = useState("");
@@ -37,6 +59,16 @@ export const StudioApp: React.FC = () => {
   const [renderMessage, setRenderMessage] = useState<string>();
   const [downloadUrl, setDownloadUrl] = useState<string>();
   const [error, setError] = useState<string>();
+  const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
+
+  useEffect(() => {
+    setCustomTemplates(readCustomTemplates());
+  }, []);
+
+  const allTemplates = useMemo(
+    () => [...templates, ...customTemplates],
+    [customTemplates],
+  );
 
   const previewPlan = useMemo(
     () => ({
@@ -48,7 +80,8 @@ export const StudioApp: React.FC = () => {
   );
 
   const selectTemplate = (id: string) => {
-    const template = getTemplateById(id);
+    const template =
+      allTemplates.find((candidate) => candidate.id === id) ?? getTemplateById(id);
     setSelectedTemplateId(id);
     setStyle(template.defaultStyle);
     setWarning(undefined);
@@ -59,6 +92,20 @@ export const StudioApp: React.FC = () => {
       templateId: id,
       style: template.defaultStyle,
     }));
+  };
+
+  const createTemplate = (template: TemplatePreset) => {
+    const next = [template, ...customTemplates].slice(0, 20);
+    setCustomTemplates(next);
+    window.localStorage.setItem(customTemplateStorageKey, JSON.stringify(next));
+    setSelectedTemplateId(template.id);
+    setStyle(template.defaultStyle);
+    setPlan((current) => ({
+      ...current,
+      templateId: template.id,
+      style: template.defaultStyle,
+    }));
+    setSourceLabel(`已创建并选择「${template.name}」模板`);
   };
 
   const updateStyle = (nextStyle: StyleOptions) => {
@@ -81,11 +128,17 @@ export const StudioApp: React.FC = () => {
     setDownloadUrl(undefined);
 
     try {
+      const selectedTemplate =
+        allTemplates.find((candidate) => candidate.id === selectedTemplateId) ??
+        getTemplateById(selectedTemplateId);
       const response = await fetch("/api/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateId: selectedTemplateId,
+          templateName: selectedTemplate.name,
+          templateDescription: selectedTemplate.description,
+          templatePromptHint: selectedTemplate.promptHint,
           userPrompt: text,
           style,
         }),
@@ -143,9 +196,10 @@ export const StudioApp: React.FC = () => {
   return (
     <main className="app-shell">
       <TemplatePicker
-        templates={templates}
+        templates={allTemplates}
         selectedId={selectedTemplateId}
         onSelect={selectTemplate}
+        onManage={() => setIsTemplateManagerOpen(true)}
       />
 
       <div className="workspace">
@@ -173,6 +227,13 @@ export const StudioApp: React.FC = () => {
         renderMessage={renderMessage}
         downloadUrl={downloadUrl}
         onRender={renderVideo}
+      />
+
+      <TemplateManagerModal
+        open={isTemplateManagerOpen}
+        baseStyle={style}
+        onClose={() => setIsTemplateManagerOpen(false)}
+        onCreate={createTemplate}
       />
     </main>
   );

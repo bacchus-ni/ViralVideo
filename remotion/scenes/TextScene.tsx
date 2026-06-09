@@ -30,9 +30,10 @@ export const TextScene: React.FC<{
   styleOptions: StyleOptions;
 }> = ({ shot, styleOptions }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { fps, durationInFrames, width, height } = useVideoConfig();
   const palette = styleOptions.colors;
   const pace = paceMultiplier[styleOptions.pace];
+  const baseFontSize = Math.min(width, height) * (styleOptions.fontSize / 1080);
   const intro = Math.max(8, Math.round((0.36 * fps) / pace));
   const outroStart = Math.max(intro + 1, durationInFrames - Math.round(0.28 * fps));
 
@@ -98,10 +99,10 @@ export const TextScene: React.FC<{
                 color: isAccent ? palette.accent : palette.primary,
                 fontSize:
                   line.length <= 3
-                    ? styleOptions.fontSize * 1.16
+                    ? baseFontSize * 1.16
                     : line.length <= 5
-                      ? styleOptions.fontSize
-                      : styleOptions.fontSize * 0.78,
+                      ? baseFontSize
+                      : baseFontSize * 0.78,
                 marginBottom: 18,
               }}
             >

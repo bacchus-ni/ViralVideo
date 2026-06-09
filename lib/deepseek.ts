@@ -341,6 +341,17 @@ const normalizeDeepSeekPlan = (
         pickString(requestStyle?.backgroundImageUrl, rawStyle.backgroundImageUrl) ??
         fallback.style.backgroundImageUrl,
       pace: pickEnum(paces, requestStyle?.pace ?? rawStyle.pace, fallback.style.pace),
+      musicUrl:
+        pickString(requestStyle?.musicUrl, rawStyle.musicUrl) ??
+        fallback.style.musicUrl,
+      musicVolume: Math.max(
+        0,
+        Math.min(
+          1,
+          pickNumber(requestStyle?.musicVolume, rawStyle.musicVolume) ??
+            fallback.style.musicVolume,
+        ),
+      ),
       aspectRatio: pickEnum(
         aspectRatios,
         requestStyle?.aspectRatio ?? rawStyle.aspectRatio,
@@ -376,16 +387,19 @@ export const generatePlanWithDeepSeek = async (
   }
 
   const template = getTemplateById(request.templateId);
+  const templateName = request.templateName ?? template.name;
+  const templateDescription = request.templateDescription ?? template.description;
+  const templatePromptHint = request.templatePromptHint ?? template.promptHint;
   const fallback = buildFallbackPlan(
     request.templateId,
     request.userPrompt,
     request.style,
   );
 
-  const userPrompt = `模板：${template.name}
-模板 ID：${template.id}
-模板说明：${template.description}
-模板风格：${template.promptHint}
+  const userPrompt = `模板：${templateName}
+模板 ID：${request.templateId}
+模板说明：${templateDescription}
+模板风格：${templatePromptHint}
 默认样式：${JSON.stringify(template.defaultStyle)}
 用户可选样式：${JSON.stringify(request.style ?? {})}
 用户需求：${request.userPrompt}
@@ -404,7 +418,7 @@ resolution: 720p | 1080p | 2k | custom
   "platform": "douyin",
   "durationSec": 15,
   "tone": "激励向",
-  "templateId": "${template.id}",
+  "templateId": "${request.templateId}",
   "script": [
     {"id": "line-1", "text": "短句", "emphasis": ["关键词"]}
   ],
@@ -446,7 +460,7 @@ resolution: 720p | 1080p | 2k | custom
   const normalized = normalizeDeepSeekPlan(
     parsed,
     fallback,
-    template.id,
+    request.templateId,
     request.style,
   );
   const plan = videoPlanSchema.parse(normalized);

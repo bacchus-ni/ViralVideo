@@ -17,6 +17,8 @@ export const styleOptionsSchema = z.object({
   backgroundStyle: z.enum(["particles", "gradient", "solid", "image"]),
   backgroundImageUrl: z.string().optional(),
   pace: z.enum(["slow", "medium", "fast"]),
+  musicUrl: z.string().optional(),
+  musicVolume: z.number().min(0).max(1),
   aspectRatio: z.enum(["9:16", "16:9", "1:1", "4:3", "3:4", "custom"]),
   customAspectWidth: z.number().min(1).max(32).optional(),
   customAspectHeight: z.number().min(1).max(32).optional(),
@@ -53,6 +55,9 @@ export const videoPlanSchema = z.object({
 
 export const generatePlanRequestSchema = z.object({
   templateId: z.string().min(1),
+  templateName: z.string().optional(),
+  templateDescription: z.string().optional(),
+  templatePromptHint: z.string().optional(),
   userPrompt: z.string().min(2).max(200),
   style: styleOptionsSchema.partial().optional(),
 });

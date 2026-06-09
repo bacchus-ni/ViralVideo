@@ -3,7 +3,7 @@ import { defaultPlan } from "../lib/templates";
 import { Background } from "./scenes/Background";
 import { TextScene } from "./scenes/TextScene";
 import { VIDEO_FPS } from "./scenes/theme";
-import { AbsoluteFill, Sequence } from "remotion";
+import { AbsoluteFill, Audio, Sequence, staticFile } from "remotion";
 
 export type TextMixCompositionProps = {
   plan?: VideoPlan;
@@ -15,9 +15,21 @@ export const getDurationInFrames = (plan: VideoPlan) =>
 export const TextMixComposition: React.FC<TextMixCompositionProps> = ({
   plan = defaultPlan,
 }) => {
+  const musicSrc = plan.style.musicUrl?.startsWith("/")
+    ? staticFile(plan.style.musicUrl.slice(1))
+    : plan.style.musicUrl;
+
   return (
     <AbsoluteFill style={{ backgroundColor: "#050505", overflow: "hidden" }}>
       <Background styleOptions={plan.style} />
+      {musicSrc ? (
+        <Audio
+          src={musicSrc}
+          volume={plan.style.musicVolume}
+          loop
+          loopVolumeCurveBehavior="extend"
+        />
+      ) : null}
       {plan.storyboard.map((shot) => (
         <Sequence
           key={shot.id}
