@@ -53,6 +53,24 @@ const pickNumber = (...values: unknown[]) => {
   return undefined;
 };
 
+const pickClampedNumber = (
+  min: number,
+  max: number,
+  fallback: number | undefined,
+  ...values: unknown[]
+) => {
+  const picked = pickNumber(...values);
+  if (picked === undefined) return fallback;
+  return Math.max(min, Math.min(max, picked));
+};
+
+const normalizeRows = (value: unknown, sceneType: SceneType) => {
+  const rows = pickNumber(value);
+  if (rows === undefined) return sceneType === "outline-rows" ? 8 : undefined;
+  if (rows < 2) return sceneType === "outline-rows" ? 8 : undefined;
+  return Math.max(2, Math.min(16, Math.round(rows)));
+};
+
 const pickEnum = <T extends readonly string[]>(
   allowed: T,
   value: unknown,
@@ -188,17 +206,19 @@ export const normalizeAdvancedTemplate = (
           ],
           pickNumber(item.maxChars) ?? 36,
         ) || `镜头${index + 1}`;
-      const duration = pickNumber(
+      const duration = pickClampedNumber(
+        0.3,
+        10,
+        defaultDuration,
         item.durationSec,
         item.duration,
         item.seconds,
-        defaultDuration,
-      );
+      ) ?? defaultDuration;
 
       return {
         id: pickString(item.id) ?? `slot-${index + 1}`,
         startSec: pickNumber(item.startSec, item.start, index * defaultDuration) ?? 0,
-        durationSec: Math.max(0.3, Math.min(10, duration ?? defaultDuration)),
+        durationSec: duration,
         sceneType,
         textRole:
           pickEnum(
@@ -207,10 +227,8 @@ export const normalizeAdvancedTemplate = (
             roleCycle[index % roleCycle.length],
           ) ?? "point",
         defaultText,
-        maxChars: Math.max(
-          1,
-          Math.min(80, pickNumber(item.maxChars, item.maxLength) ?? 36),
-        ),
+        maxChars:
+          pickClampedNumber(1, 80, 36, item.maxChars, item.maxLength) ?? 36,
         visualDescription:
           pickString(
             item.visualDescription,
@@ -229,14 +247,17 @@ export const normalizeAdvancedTemplate = (
             layout.vertical,
             "center",
           ),
-          maxWidth: pickNumber(layout.maxWidth) ?? 0.86,
+          maxWidth: pickClampedNumber(0.3, 1, 0.86, layout.maxWidth),
           scale:
-            pickNumber(layout.scale) ??
+            pickClampedNumber(
+              0.35,
+              2.2,
+              undefined,
+              layout.scale,
+            ) ??
             (sceneType === "logo-hold" ? 0.78 : sceneType === "outline-rows" ? 1 : 1.1),
-          rotate: pickNumber(layout.rotate) ?? 0,
-          rows:
-            pickNumber(layout.rows) ??
-            (sceneType === "outline-rows" ? 8 : undefined),
+          rotate: pickClampedNumber(-45, 45, 0, layout.rotate),
+          rows: normalizeRows(layout.rows, sceneType),
           split:
             pickEnum(
               ["none", "horizontal", "vertical", "letters"] as const,
@@ -263,10 +284,15 @@ export const normalizeAdvancedTemplate = (
           emphasis: normalizeEmphasis(motion.emphasis ?? item.emphasis),
           camera: isRecord(motion.camera)
             ? {
-                zoom: pickNumber(motion.camera.zoom),
-                panX: pickNumber(motion.camera.panX),
-                panY: pickNumber(motion.camera.panY),
-                rotate: pickNumber(motion.camera.rotate),
+                zoom: pickClampedNumber(0.5, 2, undefined, motion.camera.zoom),
+                panX: pickClampedNumber(-1, 1, undefined, motion.camera.panX),
+                panY: pickClampedNumber(-1, 1, undefined, motion.camera.panY),
+                rotate: pickClampedNumber(
+                  -30,
+                  30,
+                  undefined,
+                  motion.camera.rotate,
+                ),
               }
             : undefined,
           easing: pickEnum(
@@ -274,10 +300,13 @@ export const normalizeAdvancedTemplate = (
             motion.easing,
             "expo-out",
           ),
-          intensity: Math.max(
+          intensity: pickClampedNumber(
             0,
-            Math.min(1, pickNumber(motion.intensity, rawStyle.motionIntensity) ?? 0.72),
-          ),
+            1,
+            0.72,
+            motion.intensity,
+            rawStyle.motionIntensity,
+          ) ?? 0.72,
         },
         background: {
           type: pickEnum(
