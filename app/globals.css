@@ -766,6 +766,54 @@ button:disabled {
   box-shadow: 0 8px 18px rgba(58, 173, 123, 0.12);
 }
 
+.music-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.music-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  align-items: center;
+  min-height: 84px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text);
+  padding: 12px;
+  text-align: left;
+}
+
+.music-card:hover,
+.music-card.is-active {
+  border-color: var(--green);
+  box-shadow: 0 8px 18px rgba(58, 173, 123, 0.12);
+}
+
+.music-card-icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #e8f7f0;
+  color: var(--green-dark);
+}
+
+.music-card strong {
+  font-size: 16px;
+}
+
+.music-card small {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .settings-section {
   display: flex;
   flex-direction: column;
@@ -893,6 +941,64 @@ button:disabled {
   line-height: 1.5;
 }
 
+.analysis-progress,
+.render-progress {
+  display: grid;
+  gap: 9px;
+  border: 1px solid #dceee5;
+  border-radius: 8px;
+  background: #f7fcf9;
+  padding: 12px;
+}
+
+.analysis-progress-header,
+.render-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--green-dark);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.analysis-progress-track,
+.render-progress-track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dfeee7;
+}
+
+.analysis-progress-track span,
+.render-progress-track span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, var(--green), #67dba4),
+    var(--green);
+  transition: width 320ms ease;
+}
+
+.analysis-progress-track span::after,
+.render-progress-track span::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  animation: progress-shine 1.2s linear infinite;
+  content: "";
+}
+
+.analysis-progress p,
+.render-progress p {
+  margin: 0;
+  color: #5a6370;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .advanced-structure-summary {
   display: grid;
   gap: 6px;
@@ -938,6 +1044,27 @@ button:disabled {
   gap: 28px;
   padding: 24px 34px;
   background: rgba(255, 255, 255, 0.58);
+}
+
+.preview-mute-button {
+  display: inline-flex;
+  width: min(360px, 100%);
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: #4d5765;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.preview-mute-button.is-muted {
+  border-color: rgba(58, 173, 123, 0.4);
+  background: #f7fcf9;
+  color: var(--green-dark);
 }
 
 .phone-frame {
@@ -1005,6 +1132,21 @@ button:disabled {
   text-align: center;
 }
 
+.render-progress {
+  width: min(360px, 100%);
+  margin-top: -14px;
+}
+
+@keyframes progress-shine {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
 @media (max-width: 1320px) {
   .app-shell {
     grid-template-columns: 300px minmax(520px, 1fr);
@@ -1022,7 +1164,9 @@ button:disabled {
   }
 
   .render-button,
-  .render-message {
+  .render-message,
+  .render-progress,
+  .preview-mute-button {
     width: 260px;
   }
 }
@@ -1078,7 +1222,8 @@ button:disabled {
 
 @media (max-width: 640px) {
   .template-list,
-  .style-bar {
+  .style-bar,
+  .music-grid {
     grid-template-columns: 1fr;
   }
 

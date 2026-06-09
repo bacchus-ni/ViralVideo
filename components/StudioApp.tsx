@@ -54,6 +54,8 @@ export const StudioApp: React.FC = () => {
   const [plan, setPlan] = useState<VideoPlan>(defaultPlan);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
+  const [isPreviewMuted, setIsPreviewMuted] = useState(false);
   const [sourceLabel, setSourceLabel] = useState("默认示例，可直接预览");
   const [warning, setWarning] = useState<string>();
   const [renderMessage, setRenderMessage] = useState<string>();
@@ -64,6 +66,20 @@ export const StudioApp: React.FC = () => {
   useEffect(() => {
     setCustomTemplates(readCustomTemplates());
   }, []);
+
+  useEffect(() => {
+    if (!isRendering) return undefined;
+    setRenderProgress((current) => Math.max(current, 8));
+    const timer = window.setInterval(() => {
+      setRenderProgress((current) => {
+        if (current >= 92) return current;
+        const step = current < 35 ? 7 : current < 72 ? 4 : 1.4;
+        return Math.min(92, current + step);
+      });
+    }, 650);
+
+    return () => window.clearInterval(timer);
+  }, [isRendering]);
 
   const allTemplates = useMemo(
     () => [...templates, ...customTemplates],
@@ -181,6 +197,7 @@ export const StudioApp: React.FC = () => {
     setIsRendering(true);
     setError(undefined);
     setRenderMessage(undefined);
+    setRenderProgress(6);
 
     try {
       const response = await fetch("/api/render-video", {
@@ -196,6 +213,7 @@ export const StudioApp: React.FC = () => {
 
       setRenderMessage(payload.job.message);
       setDownloadUrl(payload.job.downloadUrl);
+      setRenderProgress(100);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "生成视频失败。");
     } finally {
@@ -236,6 +254,9 @@ export const StudioApp: React.FC = () => {
         isRendering={isRendering}
         renderMessage={renderMessage}
         downloadUrl={downloadUrl}
+        renderProgress={renderProgress}
+        isPreviewMuted={isPreviewMuted}
+        onTogglePreviewMute={() => setIsPreviewMuted((current) => !current)}
         onRender={renderVideo}
       />
 

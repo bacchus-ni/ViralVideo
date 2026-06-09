@@ -1,7 +1,7 @@
 "use client";
 
 import { Image, Music, Sparkles, Upload, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AdvancedTemplateSpec, StyleOptions } from "@/lib/schemas";
 import {
   backgroundOptions,
@@ -31,6 +31,12 @@ type AnalyzeResponse = {
 };
 
 const templateStorageId = () => `custom-template-${Date.now()}`;
+const analyzeSteps = [
+  "读取 demo 视频",
+  "上传给千问多模态模型",
+  "识别镜头、转场和文字动画",
+  "整理 Remotion 高级模板结构",
+];
 
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -56,7 +62,25 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   const [advancedTemplate, setAdvancedTemplate] = useState<AdvancedTemplateSpec>();
   const [advancedSummary, setAdvancedSummary] = useState<string>();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzeProgress, setAnalyzeProgress] = useState(0);
+  const [analyzeStepIndex, setAnalyzeStepIndex] = useState(0);
   const [message, setMessage] = useState<string>();
+
+  useEffect(() => {
+    if (!isAnalyzing) return undefined;
+    setAnalyzeProgress((current) => Math.max(current, 8));
+    const timer = window.setInterval(() => {
+      setAnalyzeProgress((current) => {
+        const next = Math.min(92, current + (current < 45 ? 8 : current < 76 ? 4 : 1.6));
+        setAnalyzeStepIndex(
+          next < 28 ? 0 : next < 55 ? 1 : next < 82 ? 2 : 3,
+        );
+        return next;
+      });
+    }, 700);
+
+    return () => window.clearInterval(timer);
+  }, [isAnalyzing]);
 
   if (!open) return null;
 
@@ -97,6 +121,8 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   const analyzeVideo = async (file: File | undefined) => {
     if (!file) return;
     setIsAnalyzing(true);
+    setAnalyzeProgress(6);
+    setAnalyzeStepIndex(0);
     setMessage(undefined);
 
     try {
@@ -118,6 +144,8 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
       updateStyle(payload.template.style ?? {});
       setAdvancedTemplate(payload.template.advancedTemplate);
       setAdvancedSummary(payload.template.advancedSummary);
+      setAnalyzeProgress(100);
+      setAnalyzeStepIndex(3);
       setMessage("已根据视频生成模板草稿，可继续微调后保存。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "解析视频失败");
@@ -222,6 +250,18 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                 onChange={(event) => analyzeVideo(event.target.files?.[0])}
               />
             </label>
+            {isAnalyzing ? (
+              <div className="analysis-progress" role="status" aria-live="polite">
+                <div className="analysis-progress-header">
+                  <span>{analyzeSteps[analyzeStepIndex]}</span>
+                  <strong>{Math.round(analyzeProgress)}%</strong>
+                </div>
+                <div className="analysis-progress-track">
+                  <span style={{ width: `${Math.max(6, analyzeProgress)}%` }} />
+                </div>
+                <p>千问正在拆解视频节奏、镜头类型、文字动画和模板槽位。</p>
+              </div>
+            ) : null}
             {message ? <p className="manager-message">{message}</p> : null}
             {advancedTemplate ? (
               <div className="advanced-structure-summary">

@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronDown, Image, Palette, SlidersHorizontal, Type, X } from "lucide-react";
+import { ChevronDown, Image, Music, Palette, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { StyleOptions } from "@/lib/schemas";
 import {
   aspectRatioOptions,
   backgroundOptions,
   fontOptions,
+  musicOptions,
   palettePresets,
   resolutionOptions,
   type PalettePreset,
@@ -17,7 +18,7 @@ type StyleBarProps = {
   onChange: (value: StyleOptions) => void;
 };
 
-type Panel = "palette" | "font" | "background" | "ratio" | null;
+type Panel = "appearance" | "music" | "background" | "ratio" | null;
 
 const storageKey = "textMixCustomPalettes";
 
@@ -49,12 +50,19 @@ const colorFields: Array<{
 ];
 
 const summary = {
-  palette: (style: StyleOptions) =>
-    style.palette === "custom"
-      ? "自定义"
-      : palettePresets.find((preset) => preset.id === style.palette)?.name ?? "配色",
-  font: (style: StyleOptions) =>
-    `${fontOptions.find((font) => font.value === style.fontFamily)?.label ?? "字体"} · ${style.fontSize}px`,
+  appearance: (style: StyleOptions) => {
+    const palette =
+      style.palette === "custom"
+        ? "自定义"
+        : palettePresets.find((preset) => preset.id === style.palette)?.name ?? "配色";
+    const font = fontOptions.find((item) => item.value === style.fontFamily)?.label ?? "字体";
+    return `${palette} · ${font}`;
+  },
+  music: (style: StyleOptions) => {
+    if (!style.musicUrl) return "未选择";
+    if (style.musicUrl.startsWith("data:")) return "上传音乐";
+    return musicOptions.find((music) => music.url === style.musicUrl)?.label ?? "自定义音乐";
+  },
   background: (style: StyleOptions) =>
     style.backgroundImageUrl
       ? "上传图片"
@@ -123,23 +131,44 @@ export const StyleBar: React.FC<StyleBarProps> = ({ value, onChange }) => {
     reader.readAsDataURL(file);
   };
 
+  const uploadMusic = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        update({
+          musicUrl: reader.result,
+          musicVolume: value.musicVolume || 0.2,
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const chooseMusic = (music: (typeof musicOptions)[number]) => {
+    update({
+      musicUrl: music.url,
+      musicVolume: music.volume,
+    });
+  };
+
   return (
     <>
       <section className="style-bar" aria-label="可选风格设置">
-        <button className="style-control" type="button" onClick={() => setActivePanel("palette")}>
+        <button className="style-control" type="button" onClick={() => setActivePanel("appearance")}>
           <span className="style-control-label">
             <Palette size={22} aria-hidden />
             配色
           </span>
-          <span className="style-summary">{summary.palette(value)}</span>
+          <span className="style-summary">{summary.appearance(value)}</span>
           <ChevronDown className="select-chevron" size={18} aria-hidden />
         </button>
-        <button className="style-control" type="button" onClick={() => setActivePanel("font")}>
+        <button className="style-control" type="button" onClick={() => setActivePanel("music")}>
           <span className="style-control-label">
-            <Type size={23} aria-hidden />
-            字体
+            <Music size={22} aria-hidden />
+            音乐
           </span>
-          <span className="style-summary">{summary.font(value)}</span>
+          <span className="style-summary">{summary.music(value)}</span>
           <ChevronDown className="select-chevron" size={18} aria-hidden />
         </button>
         <button className="style-control" type="button" onClick={() => setActivePanel("background")}>
@@ -171,10 +200,10 @@ export const StyleBar: React.FC<StyleBarProps> = ({ value, onChange }) => {
           >
             <header className="settings-header">
               <h3>
-                {activePanel === "palette"
-                  ? "配色"
-                  : activePanel === "font"
-                    ? "字体"
+                {activePanel === "appearance"
+                  ? "配色与字体"
+                  : activePanel === "music"
+                    ? "音乐"
                     : activePanel === "background"
                       ? "背景"
                       : "比例与分辨率"}
@@ -184,7 +213,7 @@ export const StyleBar: React.FC<StyleBarProps> = ({ value, onChange }) => {
               </button>
             </header>
 
-            {activePanel === "palette" ? (
+            {activePanel === "appearance" ? (
               <div className="settings-content">
                 <div className="palette-grid">
                   {allPalettes.map((palette) => (
@@ -235,44 +264,93 @@ export const StyleBar: React.FC<StyleBarProps> = ({ value, onChange }) => {
                     保存到我的配色
                   </button>
                 </div>
+
+                <div className="settings-section">
+                  <h4>字体</h4>
+                  <div className="option-grid">
+                    {fontOptions.map((font) => (
+                      <button
+                        key={font.value}
+                        type="button"
+                        className={`option-card ${value.fontFamily === font.value ? "is-active" : ""}`}
+                        onClick={() => update({ fontFamily: font.value })}
+                      >
+                        {font.label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="settings-field">
+                    <span>整体大小 {value.fontSize}px</span>
+                    <input
+                      type="range"
+                      min={72}
+                      max={260}
+                      value={value.fontSize}
+                      onChange={(event) => update({ fontSize: Number(event.target.value) })}
+                    />
+                  </label>
+                  <label className="settings-field">
+                    <span>字重 {value.fontWeight}</span>
+                    <input
+                      type="range"
+                      min={300}
+                      max={1000}
+                      step={50}
+                      value={value.fontWeight}
+                      onChange={(event) => update({ fontWeight: Number(event.target.value) })}
+                    />
+                  </label>
+                </div>
               </div>
             ) : null}
 
-            {activePanel === "font" ? (
+            {activePanel === "music" ? (
               <div className="settings-content">
-                <div className="option-grid">
-                  {fontOptions.map((font) => (
+                <div className="music-grid">
+                  {musicOptions.map((music) => (
                     <button
-                      key={font.value}
+                      key={music.url}
                       type="button"
-                      className={`option-card ${value.fontFamily === font.value ? "is-active" : ""}`}
-                      onClick={() => update({ fontFamily: font.value })}
+                      className={`music-card ${value.musicUrl === music.url ? "is-active" : ""}`}
+                      onClick={() => chooseMusic(music)}
                     >
-                      {font.label}
+                      <span className="music-card-icon">
+                        <Music size={18} aria-hidden />
+                      </span>
+                      <strong>{music.label}</strong>
+                      <small>{music.description}</small>
                     </button>
                   ))}
                 </div>
-                <label className="settings-field">
-                  <span>整体大小 {value.fontSize}px</span>
+                <label className="upload-dropzone">
+                  <Music size={24} aria-hidden />
+                  上传音乐作为背景音乐
                   <input
-                    type="range"
-                    min={72}
-                    max={260}
-                    value={value.fontSize}
-                    onChange={(event) => update({ fontSize: Number(event.target.value) })}
+                    type="file"
+                    accept="audio/*"
+                    onChange={(event) => uploadMusic(event.target.files?.[0])}
                   />
                 </label>
                 <label className="settings-field">
-                  <span>字重 {value.fontWeight}</span>
+                  <span>音乐音量 {Math.round(value.musicVolume * 100)}%</span>
                   <input
                     type="range"
-                    min={300}
-                    max={1000}
-                    step={50}
-                    value={value.fontWeight}
-                    onChange={(event) => update({ fontWeight: Number(event.target.value) })}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={value.musicVolume}
+                    onChange={(event) => update({ musicVolume: Number(event.target.value) })}
                   />
                 </label>
+                {value.musicUrl ? (
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={() => update({ musicUrl: undefined })}
+                  >
+                    移除背景音乐
+                  </button>
+                ) : null}
               </div>
             ) : null}
 

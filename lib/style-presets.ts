@@ -92,6 +92,44 @@ export const fontOptions = [
   { label: "衬线", value: "serif" },
 ] satisfies Array<{ label: string; value: StyleOptions["fontFamily"] }>;
 
+export const musicOptions = [
+  {
+    label: "强节奏快剪",
+    description: "适合闪切、观点、金句",
+    url: "/music/viral-quote.wav",
+    volume: 0.24,
+  },
+  {
+    label: "情绪铺底",
+    description: "适合治愈、独白、慢节奏",
+    url: "/music/emotional-monologue.wav",
+    volume: 0.2,
+  },
+  {
+    label: "知识脉冲",
+    description: "适合讲解、科普、信息流",
+    url: "/music/knowledge-cut.wav",
+    volume: 0.2,
+  },
+  {
+    label: "轻快种草",
+    description: "适合好物推荐、生活方式",
+    url: "/music/product-seeding.wav",
+    volume: 0.18,
+  },
+  {
+    label: "极简氛围",
+    description: "适合品牌、标题、留白",
+    url: "/music/minimal-title.wav",
+    volume: 0.16,
+  },
+] satisfies Array<{
+  label: string;
+  description: string;
+  url: string;
+  volume: number;
+}>;
+
 export const backgroundOptions = [
   { label: "粒子特效", value: "particles" },
   { label: "柔和渐变", value: "gradient" },
