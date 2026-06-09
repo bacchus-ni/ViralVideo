@@ -2,7 +2,15 @@
 
 import { Clipboard, ListVideo, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { StoryboardShot, VideoPlan } from "@/lib/schemas";
+import {
+  advancedMotionEntrances,
+  advancedSceneTypes,
+  type SceneType,
+  type StoryboardShot,
+  type TemplateSlot,
+  type VideoPlan,
+} from "@/lib/schemas";
+import { getTemplateDuration, reflowTemplateSlots } from "@/lib/advanced-template";
 
 type GeneratedPlanCardProps = {
   plan: VideoPlan;
@@ -22,10 +30,32 @@ const animationOptions: Array<{
   { label: "打字", value: "typewriter" },
 ];
 
+const sceneTypeLabels: Record<SceneType, string> = {
+  "intro-wipe": "色块擦入",
+  "word-card": "文字卡片",
+  "split-word": "裁切分裂",
+  "stomp-word": "冲击字",
+  "letter-scatter": "字散归位",
+  "outline-rows": "描边阵列",
+  "logo-hold": "长停留",
+  "blank-color": "撞色过渡",
+  "stacked-title": "堆叠标题",
+};
+
+const entranceLabels: Record<TemplateSlot["motion"]["entrance"], string> = {
+  wipe: "擦入",
+  stomp: "冲击",
+  slide: "滑入",
+  scale: "缩放",
+  scatter: "散开",
+  typewriter: "打字",
+  none: "无",
+};
+
 const recalculateTiming = (plan: VideoPlan): VideoPlan => {
   let cursor = 0;
   const storyboard = plan.storyboard.map((shot, index) => {
-    const durationSec = Math.max(0.8, Math.min(8, shot.durationSec));
+    const durationSec = Math.max(0.3, Math.min(10, shot.durationSec));
     const nextShot = {
       ...shot,
       id: shot.id || `shot-${index + 1}`,
@@ -35,11 +65,41 @@ const recalculateTiming = (plan: VideoPlan): VideoPlan => {
     cursor += durationSec;
     return nextShot;
   });
+  const advancedSlots = plan.advancedTemplate
+    ? reflowTemplateSlots(
+        plan.advancedTemplate.slots.map((slot, index) => ({
+          ...slot,
+          durationSec: storyboard[index]?.durationSec ?? slot.durationSec,
+          defaultText: storyboard[index]?.text || slot.defaultText,
+          visualDescription:
+            storyboard[index]?.visualDescription ?? slot.visualDescription,
+        })),
+      )
+    : undefined;
+  const advancedTemplate =
+    plan.advancedTemplate && advancedSlots
+      ? {
+          ...plan.advancedTemplate,
+          slots: advancedSlots,
+          durationSec: getTemplateDuration(
+            advancedSlots,
+            plan.advancedTemplate.durationSec,
+          ),
+          beatMarkers: advancedSlots.map((slot) => slot.startSec),
+          flashCuts: advancedSlots.slice(1).map((slot) => slot.startSec),
+        }
+      : undefined;
 
   return {
     ...plan,
-    durationSec: Number(Math.max(10, Math.min(45, cursor)).toFixed(2)),
+    durationSec: Number(
+      Math.max(
+        10,
+        Math.min(45, advancedTemplate?.durationSec ?? cursor),
+      ).toFixed(2),
+    ),
     storyboard,
+    advancedTemplate,
   };
 };
 
@@ -64,7 +124,7 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
       .split(/\n+/)
       .map((line) => line.trim())
       .filter(Boolean)
-      .slice(0, 12);
+      .slice(0, 24);
     const nextLines = lines.length > 0 ? lines : [""];
     const script = nextLines.map((line, index) => ({
       id: plan.script[index]?.id ?? `line-${index + 1}`,
@@ -115,6 +175,47 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
         storyboard,
       }),
     );
+  };
+
+  const updateAdvancedSlot = (index: number, patch: Partial<TemplateSlot>) => {
+    if (!plan.advancedTemplate) return;
+    const slots = reflowTemplateSlots(
+      plan.advancedTemplate.slots.map((slot, slotIndex) =>
+        slotIndex === index
+          ? {
+              ...slot,
+              ...patch,
+              layout: {
+                ...slot.layout,
+                ...(patch.layout ?? {}),
+              },
+              motion: {
+                ...slot.motion,
+                ...(patch.motion ?? {}),
+              },
+              background: {
+                ...slot.background,
+                ...(patch.background ?? {}),
+              },
+            }
+          : slot,
+      ),
+    );
+
+    onChange({
+      ...plan,
+      durationSec: Math.max(
+        10,
+        Math.min(45, getTemplateDuration(slots, plan.advancedTemplate.durationSec)),
+      ),
+      advancedTemplate: {
+        ...plan.advancedTemplate,
+        slots,
+        durationSec: getTemplateDuration(slots, plan.advancedTemplate.durationSec),
+        beatMarkers: slots.map((slot) => slot.startSec),
+        flashCuts: slots.slice(1).map((slot) => slot.startSec),
+      },
+    });
   };
 
   return (
@@ -175,13 +276,13 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
                   <label>
                     <input
                       type="number"
-                      min={0.8}
-                      max={8}
+                      min={0.3}
+                      max={10}
                       step={0.1}
                       value={shot.durationSec}
                       onChange={(event) =>
                         updateStoryboardShot(index, {
-                          durationSec: Number(event.target.value) || 0.8,
+                          durationSec: Number(event.target.value) || 0.3,
                         })
                       }
                     />
@@ -202,6 +303,48 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
                     ))}
                   </select>
                 </div>
+                {plan.advancedTemplate?.slots[index] ? (
+                  <div className="advanced-slot-row">
+                    <label>
+                      <span>高级镜头</span>
+                      <select
+                        value={plan.advancedTemplate.slots[index].sceneType}
+                        onChange={(event) =>
+                          updateAdvancedSlot(index, {
+                            sceneType: event.target.value as SceneType,
+                          })
+                        }
+                      >
+                        {advancedSceneTypes.map((sceneType) => (
+                          <option key={sceneType} value={sceneType}>
+                            {sceneTypeLabels[sceneType]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>入场方式</span>
+                      <select
+                        value={plan.advancedTemplate.slots[index].motion.entrance}
+                        onChange={(event) =>
+                          updateAdvancedSlot(index, {
+                            motion: {
+                              ...plan.advancedTemplate!.slots[index].motion,
+                              entrance: event.target
+                                .value as TemplateSlot["motion"]["entrance"],
+                            },
+                          })
+                        }
+                      >
+                        {advancedMotionEntrances.map((entrance) => (
+                          <option key={entrance} value={entrance}>
+                            {entranceLabels[entrance]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
                 <label className="storyboard-field">
                   <span>画面文字</span>
                   <input

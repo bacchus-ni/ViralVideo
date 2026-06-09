@@ -1,9 +1,17 @@
 import {
   clampPlanTiming,
   type GeneratePlanRequest,
+  type AdvancedTemplateSpec,
+  type SceneType,
+  type StoryboardShot,
   type VideoPlan,
   videoPlanSchema,
 } from "@/lib/schemas";
+import {
+  getTemplateDuration,
+  reflowTemplateSlots,
+  summarizeAdvancedTemplate,
+} from "@/lib/advanced-template";
 import { getPalettePreset } from "@/lib/style-presets";
 import { buildFallbackPlan, getTemplateById } from "@/lib/templates";
 
@@ -28,6 +36,18 @@ const paces = ["slow", "medium", "fast"] as const;
 const aspectRatios = ["9:16", "16:9", "1:1", "4:3", "3:4", "custom"] as const;
 const resolutions = ["720p", "1080p", "2k", "custom"] as const;
 
+const sceneAnimationMap: Record<SceneType, StoryboardShot["animation"]> = {
+  "intro-wipe": "slide-up",
+  "word-card": "pop",
+  "split-word": "slide-up",
+  "stomp-word": "pop",
+  "letter-scatter": "zoom",
+  "outline-rows": "slide-up",
+  "logo-hold": "zoom",
+  "blank-color": "fade",
+  "stacked-title": "slide-up",
+};
+
 const systemPrompt = `你是一个短视频纯文本混剪策划助手。
 你需要根据用户需求和模板类型，生成适合竖屏短视频的文案和分镜。
 
@@ -42,7 +62,8 @@ const systemPrompt = `你是一个短视频纯文本混剪策划助手。
 8. script 和 storyboard 的 text 应该互相对应。
 9. 输出字段必须符合 VideoPlan：title、platform、durationSec、tone、templateId、script、storyboard、style。
 10. script 必须是数组，不要输出字符串。script 数组元素格式：{"id":"line-1","text":"短句","emphasis":["关键词"]}。
-11. storyboard 必须是数组，每个元素都必须有 id，例如 shot-1、shot-2。`;
+11. storyboard 必须是数组，每个元素都必须有 id，例如 shot-1、shot-2。
+12. 如果用户提供高级模板槽位，script 和 storyboard 数量要与槽位数量一致，逐槽位填充文字和画面说明。`;
 
 const extractJson = (content: string) => {
   const trimmed = content.trim();
@@ -185,7 +206,7 @@ const normalizeScript = (rawScript: unknown, fallback: VideoPlan) => {
     merged.push(fallbackLine);
   }
 
-  return merged.slice(0, 12).map((line, index) => ({
+  return merged.slice(0, 24).map((line, index) => ({
     id: line.id || `line-${index + 1}`,
     text: cleanLine(line.text) || fallback.script[index]?.text || "继续向前",
     emphasis: line.emphasis ?? [],
@@ -202,7 +223,7 @@ const normalizeStoryboard = (
     : typeof rawStoryboard === "string"
       ? splitLines(rawStoryboard)
       : [];
-  const count = Math.max(3, Math.min(12, source.length || script.length));
+  const count = Math.max(3, Math.min(24, source.length || script.length));
   const defaultDuration = Math.max(
     1.2,
     Math.min(4, fallback.durationSec / count),
@@ -230,7 +251,7 @@ const normalizeStoryboard = (
       const shot = {
         id: pickString(raw.id) ?? `shot-${index + 1}`,
         startSec: pickNumber(raw.startSec, raw.start, cursor) ?? cursor,
-        durationSec: Math.max(0.8, Math.min(8, durationSec ?? defaultDuration)),
+        durationSec: Math.max(0.3, Math.min(10, durationSec ?? defaultDuration)),
         text: cleanLine(text),
         visualDescription:
           pickString(
@@ -260,11 +281,71 @@ const normalizeStoryboard = (
     });
   }
 
-  return normalized.slice(0, 12).map((shot, index) => ({
+  return normalized.slice(0, 24).map((shot, index) => ({
     ...shot,
     id: shot.id || `shot-${index + 1}`,
     text: cleanLine(shot.text) || script[index]?.text || fallback.script[index]?.text,
   }));
+};
+
+const alignPlanToAdvancedTemplate = (
+  plan: VideoPlan,
+  advancedTemplate: AdvancedTemplateSpec,
+): VideoPlan => {
+  const slots = reflowTemplateSlots(advancedTemplate.slots);
+  const durationSec = getTemplateDuration(slots, advancedTemplate.durationSec);
+  const script = slots.map((slot, index) => {
+    const existingLine = plan.script[index];
+    const existingShot = plan.storyboard[index];
+    const text = cleanLine(
+      existingLine?.text || existingShot?.text || slot.defaultText,
+    ).slice(0, Math.min(36, slot.maxChars ?? 36));
+
+    return {
+      id: existingLine?.id || `line-${index + 1}`,
+      text: text || slot.defaultText.slice(0, 36),
+      emphasis:
+        existingLine?.emphasis?.length
+          ? existingLine.emphasis
+          : slot.textRole === "keyword" || slot.textRole === "hook"
+            ? [text || slot.defaultText.slice(0, 12)]
+            : [],
+    };
+  });
+  const storyboard = slots.map((slot, index) => {
+    const existingShot = plan.storyboard[index];
+    const text = script[index]?.text || slot.defaultText.slice(0, 36);
+
+    return {
+      id: existingShot?.id || `shot-${index + 1}`,
+      startSec: slot.startSec,
+      durationSec: slot.durationSec,
+      text,
+      visualDescription:
+        existingShot?.visualDescription ||
+        slot.visualDescription ||
+        `${slot.sceneType} / ${slot.motion.entrance} / ${slot.textRole}`,
+      animation: existingShot?.animation || sceneAnimationMap[slot.sceneType],
+    };
+  });
+
+  return {
+    ...plan,
+    durationSec: Number(Math.max(10, Math.min(45, durationSec)).toFixed(2)),
+    script,
+    storyboard,
+    advancedTemplate: {
+      ...advancedTemplate,
+      slots,
+      durationSec,
+      beatMarkers: advancedTemplate.beatMarkers.length
+        ? advancedTemplate.beatMarkers
+        : slots.map((slot) => slot.startSec),
+      flashCuts: advancedTemplate.flashCuts.length
+        ? advancedTemplate.flashCuts
+        : slots.slice(1).map((slot) => slot.startSec),
+    },
+  };
 };
 
 const normalizeDeepSeekPlan = (
@@ -272,6 +353,7 @@ const normalizeDeepSeekPlan = (
   fallback: VideoPlan,
   templateId: string,
   requestStyle: GeneratePlanRequest["style"],
+  advancedTemplate?: AdvancedTemplateSpec,
 ) => {
   const raw = isRecord(parsed) ? parsed : {};
   const rawStyle = isRecord(raw.style) ? raw.style : {};
@@ -285,7 +367,7 @@ const normalizeDeepSeekPlan = (
   const rawColors = isRecord(rawStyle.colors) ? rawStyle.colors : {};
   const presetColors = palette === "custom" ? fallback.style.colors : getPalettePreset(palette).colors;
 
-  return {
+  const plan: VideoPlan = {
     ...fallback,
     title: pickString(raw.title, raw.topic) ?? fallback.title,
     platform: pickEnum(platforms, raw.platform, fallback.platform),
@@ -376,6 +458,10 @@ const normalizeDeepSeekPlan = (
         fallback.style.customHeight,
     },
   };
+
+  return advancedTemplate
+    ? alignPlanToAdvancedTemplate(plan, advancedTemplate)
+    : plan;
 };
 
 export const generatePlanWithDeepSeek = async (
@@ -387,14 +473,18 @@ export const generatePlanWithDeepSeek = async (
   }
 
   const template = getTemplateById(request.templateId);
+  const advancedTemplate = request.advancedTemplate ?? template.advancedTemplate;
   const templateName = request.templateName ?? template.name;
   const templateDescription = request.templateDescription ?? template.description;
   const templatePromptHint = request.templatePromptHint ?? template.promptHint;
-  const fallback = buildFallbackPlan(
-    request.templateId,
-    request.userPrompt,
-    request.style,
-  );
+  const fallback = {
+    ...buildFallbackPlan(request.templateId, request.userPrompt, request.style),
+    advancedTemplate,
+  };
+  const advancedPrompt = advancedTemplate
+    ? `高级模板槽位如下。必须按槽位顺序输出 ${advancedTemplate.slots.length} 条 script 和 storyboard，不要改变槽位数量；每条文案尽量短，适配对应 sceneType。分镜 durationSec 和 startSec 参考槽位即可。
+${summarizeAdvancedTemplate(advancedTemplate)}`
+    : "当前是基础模板，按普通纯文本分镜生成。";
 
   const userPrompt = `模板：${templateName}
 模板 ID：${request.templateId}
@@ -402,6 +492,7 @@ export const generatePlanWithDeepSeek = async (
 模板风格：${templatePromptHint}
 默认样式：${JSON.stringify(template.defaultStyle)}
 用户可选样式：${JSON.stringify(request.style ?? {})}
+${advancedPrompt}
 用户需求：${request.userPrompt}
 
 请生成 VideoPlan JSON。style 必须使用这些枚举：
@@ -462,6 +553,7 @@ resolution: 720p | 1080p | 2k | custom
     fallback,
     request.templateId,
     request.style,
+    advancedTemplate,
   );
   const plan = videoPlanSchema.parse(normalized);
 

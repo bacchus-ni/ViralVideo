@@ -40,7 +40,12 @@ export const TemplatePicker: React.FC<TemplatePickerProps> = ({
                 <span>{template.name.slice(0, 4)}</span>
               </span>
               <span className="template-copy">
-                <strong>{template.name}</strong>
+                <strong>
+                  {template.name}
+                  {template.advancedTemplate ? (
+                    <span className="template-type-badge">高级</span>
+                  ) : null}
+                </strong>
                 <small>{template.description}</small>
               </span>
               {selected ? (

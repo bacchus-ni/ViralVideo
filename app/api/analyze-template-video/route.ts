@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { styleOptionsSchema } from "@/lib/schemas";
+import {
+  normalizeAdvancedTemplate,
+  summarizeAdvancedTemplate,
+} from "@/lib/advanced-template";
 import { getPalettePreset } from "@/lib/style-presets";
 import { defaultPlan } from "@/lib/templates";
 
@@ -24,8 +28,8 @@ const extractJson = (value: string) => {
   return match[0];
 };
 
-const systemPrompt = `你是一个短视频模板分析助手。
-用户会上传一段 demo 视频。请分析它的文字视频风格、配色、字体气质、背景类型、节奏，并生成可用于纯文本混剪的模板草稿。
+const systemPrompt = `你是一个短视频模板拆解师。
+用户会上传一段 demo 视频。请分析它的文字视频风格、配色、字体气质、背景类型、节奏、转场、运镜、文字动画和镜头时间线，并生成可用于 Remotion 纯文本混剪的模板草稿。
 
 只输出 JSON，不要输出 Markdown。JSON 形状：
 {
@@ -40,7 +44,49 @@ const systemPrompt = `你是一个短视频模板分析助手。
     "fontWeight": 300到1000之间的数字,
     "backgroundStyle": "particles|gradient|solid|image",
     "pace": "slow|medium|fast"
+  },
+  "advancedTemplate": {
+    "name": "高级模板名",
+    "description": "模板结构说明",
+    "durationSec": 视频总时长秒数，可估算,
+    "fps": 帧率，可估算,
+    "aspectRatio": "9:16|16:9|1:1|4:3|3:4|custom",
+    "style": {
+      "palette": "gold|blue|white|dark|fresh|macaron|custom",
+      "colors": {"background":"#000000","surface":"#111111","primary":"#ffffff","accent":"#e7b84b","muted":"#897247"},
+      "fontFamily": "hei|song|yuan|serif",
+      "fontSize": 72到260之间的数字,
+      "fontWeight": 300到1000之间的数字,
+      "backgroundStyle": "particles|gradient|solid|image",
+      "motionIntensity": 0到1之间的数字
+    },
+    "beatMarkers": [0, 0.5, 1.0],
+    "flashCuts": [0.5, 1.0],
+    "slots": [
+      {
+        "id": "slot-1",
+        "startSec": 0,
+        "durationSec": 0.5,
+        "sceneType": "intro-wipe|word-card|split-word|stomp-word|letter-scatter|outline-rows|logo-hold|blank-color|stacked-title",
+        "textRole": "hook|keyword|point|brand|ending|filler",
+        "defaultText": "该镜头默认文字",
+        "maxChars": 8,
+        "visualDescription": "画面、文字入场、转场说明",
+        "layout": {"align":"center|left|right","vertical":"center|top|bottom","maxWidth":0.8,"scale":1,"rotate":0,"rows":8,"split":"none|horizontal|vertical|letters"},
+        "motion": {"entrance":"wipe|stomp|slide|scale|scatter|typewriter|none","emphasis":["jitter","flash","skew","clip-split","outline","repeat-rows"],"easing":"expo-out|linear|back-out|snap","intensity":0.8},
+        "background": {"type":"solid|gradient|particles|image|transparent","colorRole":"background|surface|primary|accent|muted","color":"#050505","accentColor":"#e7b84b"},
+        "transitionOut": {"type":"cut|flash-cut|wipe|fade","durationSec":0.08}
+      }
+    ]
   }
+}
+
+要求：
+1. 不要只描述浅层风格，必须逐镜头拆 slots。
+2. sceneType 和 motion 枚举必须从上面选择，不要发明新值。
+3. startSec、durationSec、beatMarkers、flashCuts 可以估算，但必须顺序合理。
+4. 如果视频是强节奏文字快剪，应优先使用 intro-wipe、word-card、split-word、stomp-word、letter-scatter、outline-rows、logo-hold、blank-color。
+5. 输出 slots 数量建议 8 到 20 个。
 }`;
 
 export async function POST(request: Request) {
@@ -127,13 +173,44 @@ export async function POST(request: Request) {
         ...(parsed.style?.colors ?? {}),
       },
     });
+    const advancedTemplate = normalizeAdvancedTemplate(
+      parsed.advancedTemplate ?? parsed,
+      {
+        ...defaultPlan.style,
+        ...baseStyle,
+        ...style,
+        colors: {
+          ...defaultPlan.style.colors,
+          ...(baseStyle.colors ?? {}),
+          ...(style.colors ?? {}),
+        },
+      },
+      {
+        name: parsed.name || "视频模板",
+        description: parsed.description || "从 demo 视频解析生成",
+        source: "qwen-video",
+      },
+    );
+    const mergedStyle = styleOptionsSchema.partial().parse({
+      ...style,
+      ...(advancedTemplate.style ?? {}),
+      colors: {
+        ...(style.colors ?? {}),
+        ...(advancedTemplate.style?.colors ?? {}),
+      },
+      aspectRatio: advancedTemplate.aspectRatio,
+      musicUrl: style.musicUrl ?? baseStyle.musicUrl,
+      musicVolume: style.musicVolume ?? baseStyle.musicVolume ?? 0.2,
+    });
 
     return NextResponse.json({
       template: {
         name: parsed.name || "视频模板",
         description: parsed.description || "从 demo 视频解析生成",
         promptHint: parsed.promptHint || "参考 demo 视频的节奏、配色和文字风格。",
-        style,
+        style: mergedStyle,
+        advancedTemplate,
+        advancedSummary: summarizeAdvancedTemplate(advancedTemplate),
       },
     });
   } catch (error) {

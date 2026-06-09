@@ -2,7 +2,7 @@
 
 import { Image, Music, Sparkles, Upload, X } from "lucide-react";
 import { useState } from "react";
-import type { StyleOptions } from "@/lib/schemas";
+import type { AdvancedTemplateSpec, StyleOptions } from "@/lib/schemas";
 import {
   backgroundOptions,
   fontOptions,
@@ -24,6 +24,8 @@ type AnalyzeResponse = {
     description?: string;
     promptHint?: string;
     style?: Partial<StyleOptions>;
+    advancedTemplate?: AdvancedTemplateSpec;
+    advancedSummary?: string;
   };
   error?: string;
 };
@@ -51,6 +53,8 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   const [description, setDescription] = useState("适合自定义文字混剪");
   const [promptHint, setPromptHint] = useState("按上传样例的节奏生成文字分镜。");
   const [style, setStyle] = useState<StyleOptions>(baseStyle);
+  const [advancedTemplate, setAdvancedTemplate] = useState<AdvancedTemplateSpec>();
+  const [advancedSummary, setAdvancedSummary] = useState<string>();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [message, setMessage] = useState<string>();
 
@@ -112,6 +116,8 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
       setDescription(payload.template.description || description);
       setPromptHint(payload.template.promptHint || promptHint);
       updateStyle(payload.template.style ?? {});
+      setAdvancedTemplate(payload.template.advancedTemplate);
+      setAdvancedSummary(payload.template.advancedSummary);
       setMessage("已根据视频生成模板草稿，可继续微调后保存。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "解析视频失败");
@@ -121,13 +127,45 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   };
 
   const saveTemplate = () => {
+    const id = templateStorageId();
+    const savedAdvancedTemplate: AdvancedTemplateSpec | undefined = advancedTemplate
+      ? {
+          ...advancedTemplate,
+          id: `${id}-advanced`,
+          name: name.trim() || advancedTemplate.name,
+          description: description.trim() || advancedTemplate.description,
+          source:
+            advancedTemplate.source === "qwen-video"
+              ? ("qwen-video" as const)
+              : ("user" as const),
+          aspectRatio: style.aspectRatio,
+          style: {
+            ...(advancedTemplate.style ?? {}),
+            palette: style.palette,
+            colors: style.colors,
+            fontFamily: style.fontFamily,
+            fontSize: style.fontSize,
+            fontWeight: style.fontWeight,
+            backgroundStyle: style.backgroundStyle,
+          },
+          audio: style.musicUrl
+            ? {
+                url: style.musicUrl,
+                volume: style.musicVolume,
+                loop: true,
+              }
+            : advancedTemplate.audio,
+        }
+      : undefined;
+
     onCreate({
-      id: templateStorageId(),
+      id,
       name: name.trim() || "我的模板",
       description: description.trim() || "自定义模板",
       thumbnail: "minimal",
       defaultStyle: style,
       promptHint: promptHint.trim() || "按自定义模板生成纯文本混剪。",
+      advancedTemplate: savedAdvancedTemplate,
     });
     onClose();
   };
@@ -185,6 +223,16 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
               />
             </label>
             {message ? <p className="manager-message">{message}</p> : null}
+            {advancedTemplate ? (
+              <div className="advanced-structure-summary">
+                <strong>已解析高级结构</strong>
+                <span>
+                  {advancedTemplate.slots.length} 个镜头 · {advancedTemplate.durationSec}s ·{" "}
+                  {advancedTemplate.aspectRatio}
+                </span>
+                {advancedSummary ? <p>{advancedSummary.split("\n").slice(0, 4).join(" / ")}</p> : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="settings-section">

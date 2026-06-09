@@ -1,5 +1,9 @@
 import type { VideoPlan } from "../lib/schemas";
 import { defaultPlan } from "../lib/templates";
+import {
+  getAdvancedDurationInFrames,
+  KineticTextComposition,
+} from "./KineticTextComposition";
 import { Background } from "./scenes/Background";
 import { TextScene } from "./scenes/TextScene";
 import { VIDEO_FPS } from "./scenes/theme";
@@ -10,11 +14,17 @@ export type TextMixCompositionProps = {
 };
 
 export const getDurationInFrames = (plan: VideoPlan) =>
-  Math.max(1, Math.round(plan.durationSec * VIDEO_FPS));
+  plan.advancedTemplate
+    ? getAdvancedDurationInFrames(plan)
+    : Math.max(1, Math.round(plan.durationSec * VIDEO_FPS));
 
 export const TextMixComposition: React.FC<TextMixCompositionProps> = ({
   plan = defaultPlan,
 }) => {
+  if (plan.advancedTemplate) {
+    return <KineticTextComposition plan={plan} />;
+  }
+
   const musicSrc = plan.style.musicUrl?.startsWith("/")
     ? staticFile(plan.style.musicUrl.slice(1))
     : plan.style.musicUrl;

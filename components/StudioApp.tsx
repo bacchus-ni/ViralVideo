@@ -75,6 +75,7 @@ export const StudioApp: React.FC = () => {
       ...plan,
       templateId: selectedTemplateId,
       style,
+      advancedTemplate: plan.advancedTemplate,
     }),
     [plan, selectedTemplateId, style],
   );
@@ -91,6 +92,7 @@ export const StudioApp: React.FC = () => {
       ...current,
       templateId: id,
       style: template.defaultStyle,
+      advancedTemplate: template.advancedTemplate,
     }));
   };
 
@@ -104,6 +106,7 @@ export const StudioApp: React.FC = () => {
       ...current,
       templateId: template.id,
       style: template.defaultStyle,
+      advancedTemplate: template.advancedTemplate,
     }));
     setSourceLabel(`已创建并选择「${template.name}」模板`);
   };
@@ -139,6 +142,7 @@ export const StudioApp: React.FC = () => {
           templateName: selectedTemplate.name,
           templateDescription: selectedTemplate.description,
           templatePromptHint: selectedTemplate.promptHint,
+          advancedTemplate: selectedTemplate.advancedTemplate,
           userPrompt: text,
           style,
         }),
@@ -159,7 +163,13 @@ export const StudioApp: React.FC = () => {
       setWarning(payload.warning);
     } catch (caught) {
       const fallback = buildFallbackPlan(selectedTemplateId, text, style);
-      setPlan(fallback);
+      const selectedTemplate =
+        allTemplates.find((candidate) => candidate.id === selectedTemplateId) ??
+        getTemplateById(selectedTemplateId);
+      setPlan({
+        ...fallback,
+        advancedTemplate: selectedTemplate.advancedTemplate,
+      });
       setWarning(caught instanceof Error ? caught.message : "生成失败，已使用示例。");
       setSourceLabel("已使用本地示例兜底");
     } finally {

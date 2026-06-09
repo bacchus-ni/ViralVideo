@@ -1,4 +1,11 @@
-import type { StyleOptions, VideoPlan } from "./schemas";
+import { reflowTemplateSlots } from "./advanced-template";
+import type {
+  AdvancedTemplateSpec,
+  SceneType,
+  StyleOptions,
+  TemplateSlot,
+  VideoPlan,
+} from "./schemas";
 import { getPalettePreset } from "./style-presets";
 
 export type TemplatePreset = {
@@ -8,9 +15,297 @@ export type TemplatePreset = {
   thumbnail: "gold" | "sunset" | "tech" | "product" | "minimal";
   defaultStyle: StyleOptions;
   promptHint: string;
+  advancedTemplate?: AdvancedTemplateSpec;
+};
+
+const kineticStyle: StyleOptions = {
+  palette: "custom",
+  colors: {
+    background: "#050505",
+    surface: "#21114b",
+    primary: "#f9f9f6",
+    accent: "#3bdf77",
+    muted: "#ec004f",
+  },
+  fontFamily: "hei",
+  fontSize: 172,
+  fontWeight: 950,
+  backgroundStyle: "solid",
+  pace: "fast",
+  musicUrl: "/music/viral-quote.wav",
+  musicVolume: 0.24,
+  aspectRatio: "16:9",
+  resolution: "1080p",
+};
+
+type SlotSeed = {
+  sceneType: SceneType;
+  durationSec: number;
+  defaultText: string;
+  role?: TemplateSlot["textRole"];
+  background?: TemplateSlot["background"];
+  entrance?: TemplateSlot["motion"]["entrance"];
+  emphasis?: TemplateSlot["motion"]["emphasis"];
+  scale?: number;
+  rows?: number;
+  split?: TemplateSlot["layout"]["split"];
+  rotate?: number;
+  description: string;
+};
+
+const makeKineticSlot = (seed: SlotSeed, index: number): TemplateSlot => ({
+  id: `slot-${index + 1}`,
+  startSec: 0,
+  durationSec: seed.durationSec,
+  sceneType: seed.sceneType,
+  textRole: seed.role ?? "point",
+  defaultText: seed.defaultText,
+  maxChars:
+    seed.sceneType === "letter-scatter"
+      ? 6
+      : seed.sceneType === "logo-hold"
+        ? 16
+        : 10,
+  visualDescription: seed.description,
+  layout: {
+    align: "center",
+    vertical: "center",
+    maxWidth: seed.sceneType === "logo-hold" ? 0.72 : 0.82,
+    scale:
+      seed.scale ??
+      (seed.sceneType === "word-card"
+        ? 1.16
+        : seed.sceneType === "logo-hold"
+          ? 0.86
+          : 1.06),
+    rotate: seed.rotate ?? 0,
+    rows: seed.rows,
+    split:
+      seed.split ??
+      (seed.sceneType === "split-word"
+        ? "horizontal"
+        : seed.sceneType === "letter-scatter"
+          ? "letters"
+          : "none"),
+  },
+  motion: {
+    entrance:
+      seed.entrance ??
+      (seed.sceneType === "intro-wipe"
+        ? "wipe"
+        : seed.sceneType === "stomp-word"
+          ? "stomp"
+          : seed.sceneType === "letter-scatter"
+            ? "scatter"
+            : "scale"),
+    emphasis:
+      seed.emphasis ??
+      (seed.sceneType === "outline-rows"
+        ? ["outline", "repeat-rows"]
+        : seed.sceneType === "split-word"
+          ? ["clip-split", "skew"]
+          : seed.sceneType === "blank-color"
+            ? ["flash"]
+            : ["jitter", "flash"]),
+    camera: seed.sceneType === "logo-hold" ? { zoom: 1.06 } : undefined,
+    easing: seed.sceneType === "stomp-word" ? "snap" : "expo-out",
+    intensity: seed.sceneType === "logo-hold" ? 0.52 : 0.86,
+  },
+  background:
+    seed.background ??
+    ({
+      type: "solid",
+      colorRole: index % 2 === 0 ? "surface" : "accent",
+    } satisfies TemplateSlot["background"]),
+  transitionOut: { type: "flash-cut", durationSec: 0.08 },
+});
+
+const kineticSlotSeeds: SlotSeed[] = [
+    {
+      sceneType: "intro-wipe",
+      durationSec: 0.48,
+      defaultText: "先抓住注意力",
+      role: "hook",
+      background: { type: "solid", color: "#f9f9f6" },
+      description: "白色底快速擦入，标题压到画面中心",
+    },
+    {
+      sceneType: "word-card",
+      durationSec: 0.52,
+      defaultText: "观点要狠",
+      role: "keyword",
+      background: { type: "solid", colorRole: "surface" },
+      description: "紫色背景，绿色大字撞击入场",
+    },
+    {
+      sceneType: "word-card",
+      durationSec: 0.52,
+      defaultText: "信息要短",
+      role: "point",
+      background: { type: "solid", colorRole: "accent" },
+      entrance: "stomp",
+      description: "绿色背景，紫色标题快速稳定",
+    },
+    {
+      sceneType: "split-word",
+      durationSec: 0.48,
+      defaultText: "节奏切开",
+      role: "keyword",
+      background: { type: "solid", colorRole: "surface" },
+      description: "文字上下裁切分裂，斜杠装饰进入",
+    },
+    {
+      sceneType: "stomp-word",
+      durationSec: 0.48,
+      defaultText: "砸出重点",
+      role: "keyword",
+      background: { type: "solid", colorRole: "surface" },
+      rotate: -3,
+      description: "斜体大字从左侧冲入，带轻微抖动",
+    },
+    {
+      sceneType: "letter-scatter",
+      durationSec: 0.64,
+      defaultText: "字散再合",
+      role: "point",
+      background: { type: "solid", colorRole: "accent" },
+      description: "单字或字母散开后归位",
+    },
+    {
+      sceneType: "outline-rows",
+      durationSec: 0.88,
+      defaultText: "反复强化",
+      role: "point",
+      background: { type: "solid", colorRole: "surface" },
+      rows: 8,
+      description: "描边文字阵列滚动，中间实心字出现",
+    },
+    {
+      sceneType: "logo-hold",
+      durationSec: 5.6,
+      defaultText: "把结论留住",
+      role: "brand",
+      background: { type: "solid", colorRole: "background" },
+      description: "标题停留，轻微呼吸缩放，适合品牌或核心结论",
+    },
+    {
+      sceneType: "blank-color",
+      durationSec: 0.5,
+      defaultText: "换色",
+      role: "filler",
+      background: { type: "solid", colorRole: "background" },
+      entrance: "none",
+      description: "空白撞色过渡",
+    },
+    {
+      sceneType: "intro-wipe",
+      durationSec: 0.52,
+      defaultText: "第二轮反转",
+      role: "hook",
+      background: { type: "solid", color: "#f9f9f6", accentColor: "#ec004f" },
+      description: "白底擦入并叠加强调色块，进入第二轮节奏",
+    },
+    {
+      sceneType: "word-card",
+      durationSec: 0.52,
+      defaultText: "更强对比",
+      role: "keyword",
+      background: { type: "solid", color: "#ec004f" },
+      description: "洋红背景，白色大字撞击",
+    },
+    {
+      sceneType: "word-card",
+      durationSec: 0.52,
+      defaultText: "换一种说法",
+      role: "point",
+      background: { type: "solid", color: "#f9f9f6" },
+      entrance: "stomp",
+      description: "白色背景，洋红文字快速稳定",
+    },
+    {
+      sceneType: "split-word",
+      durationSec: 0.52,
+      defaultText: "再切一次",
+      role: "keyword",
+      background: { type: "solid", color: "#ec004f" },
+      description: "洋红背景文字裁切分裂",
+    },
+    {
+      sceneType: "stomp-word",
+      durationSec: 0.56,
+      defaultText: "压住情绪",
+      role: "keyword",
+      background: { type: "solid", color: "#ec004f" },
+      rotate: -3,
+      description: "斜体大字二次冲击",
+    },
+    {
+      sceneType: "letter-scatter",
+      durationSec: 0.68,
+      defaultText: "重新聚焦",
+      role: "point",
+      background: { type: "solid", color: "#f9f9f6" },
+      description: "字散开后归位，形成短促停顿",
+    },
+    {
+      sceneType: "outline-rows",
+      durationSec: 0.94,
+      defaultText: "把记忆打满",
+      role: "point",
+      background: { type: "solid", color: "#ec004f" },
+      rows: 8,
+      description: "描边阵列滚动，中间实心字叠入",
+    },
+    {
+      sceneType: "logo-hold",
+      durationSec: 5.22,
+      defaultText: "最后给行动理由",
+      role: "ending",
+      background: { type: "solid", color: "#ec004f" },
+      description: "结尾标题长停留，适合 CTA 或品牌名",
+    },
+];
+
+const kineticSlots = reflowTemplateSlots(kineticSlotSeeds.map(makeKineticSlot));
+
+const kineticMixcutTemplate: AdvancedTemplateSpec = {
+  id: "kinetic-mixcut-20s-advanced",
+  name: "强节奏快剪",
+  description: "接近参考样片的高级纯文本 kinetic typography 模板",
+  source: "preset",
+  durationSec: 19.58,
+  fps: 30,
+  aspectRatio: "16:9",
+  style: {
+    palette: "custom",
+    colors: kineticStyle.colors,
+    fontFamily: "hei",
+    fontSize: kineticStyle.fontSize,
+    fontWeight: kineticStyle.fontWeight,
+    backgroundStyle: "solid",
+    motionIntensity: 0.88,
+  },
+  slots: kineticSlots,
+  beatMarkers: kineticSlots.map((slot) => slot.startSec),
+  flashCuts: kineticSlots.slice(1).map((slot) => slot.startSec),
+  audio: {
+    url: "/music/viral-quote.wav",
+    volume: 0.24,
+    loop: true,
+  },
 };
 
 export const templates: TemplatePreset[] = [
+  {
+    id: "kinetic-mixcut",
+    name: "强节奏快剪",
+    description: "复杂运镜、闪切、文字混剪",
+    thumbnail: "tech",
+    defaultStyle: kineticStyle,
+    promptHint:
+      "按高级模板槽位填充短句，文字要短、狠、可被快速闪切，适合横屏强节奏纯文本混剪。",
+    advancedTemplate: kineticMixcutTemplate,
+  },
   {
     id: "viral-quote",
     name: "爆款金句",
@@ -119,9 +414,9 @@ export const getTemplateById = (id: string) =>
 export const defaultPlan: VideoPlan = {
   title: "自律不是苦行",
   platform: "douyin",
-  durationSec: 18,
+  durationSec: templates[0].advancedTemplate?.durationSec ?? 18,
   tone: "激励向",
-  templateId: "viral-quote",
+  templateId: templates[0].id,
   style: templates[0].defaultStyle,
   script: [
     { id: "line-1", text: "自律不是苦行", emphasis: ["不是"] },
@@ -199,6 +494,7 @@ export const defaultPlan: VideoPlan = {
       animation: "zoom",
     },
   ],
+  advancedTemplate: templates[0].advancedTemplate,
 };
 
 export const buildFallbackPlan = (
@@ -221,6 +517,11 @@ export const buildFallbackPlan = (
     style: {
       ...template.defaultStyle,
       ...style,
+      colors: {
+        ...template.defaultStyle.colors,
+        ...(style?.colors ?? {}),
+      },
     },
+    advancedTemplate: template.advancedTemplate,
   };
 };
