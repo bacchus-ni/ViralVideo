@@ -1,21 +1,25 @@
 import type { StyleOptions } from "../../lib/schemas";
-import { AbsoluteFill, Img, interpolate, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame } from "remotion";
+
+const mediaSrc = (value?: string) =>
+  value?.startsWith("/") ? staticFile(value.slice(1)) : value;
 
 export const Background: React.FC<{ styleOptions: StyleOptions }> = ({
   styleOptions,
 }) => {
   const frame = useCurrentFrame();
   const palette = styleOptions.colors;
+  const imageSrc = mediaSrc(styleOptions.backgroundImageUrl);
   const drift = interpolate(frame % 180, [0, 180], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  if (styleOptions.backgroundImageUrl) {
+  if (imageSrc) {
     return (
       <AbsoluteFill style={{ backgroundColor: palette.background }}>
         <Img
-          src={styleOptions.backgroundImageUrl}
+          src={imageSrc}
           style={{
             width: "100%",
             height: "100%",
