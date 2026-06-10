@@ -6,34 +6,6 @@
 
 项目当前重点不是做一个复杂剪辑软件，而是把「选择模板 -> 描述需求 -> AI 生成内容 -> 人工微调 -> 导出视频」这条链路做得尽量短、清楚、可控。
 
-## 演示素材占位
-
-README 中的图片和视频都使用相对路径占位。你后续只需要把真实素材放到对应目录，并保持文件名一致即可。
-
-```txt
-docs/screenshots/  # 放截图
-docs/videos/       # 放视频演示
-```
-
-建议素材清单：
-
-| 用途 | 文件路径 |
-| --- | --- |
-| 主工作台总览截图 | `docs/screenshots/01-main-studio.jpg` |
-| 上传 demo 视频解析模板截图 | `docs/screenshots/02-template-video-upload.jpg` |
-| 千问解析进度截图 | `docs/screenshots/03-template-analysis-progress.jpg` |
-| AI 生成文案与分镜截图 | `docs/screenshots/04-ai-plan-result.jpg` |
-| 文案编辑截图 | `docs/screenshots/05-script-editing.jpg` |
-| 分镜高级设置截图 | `docs/screenshots/06-shot-advanced-settings.jpg` |
-| 配色与字体设置截图 | `docs/screenshots/07-color-typography-settings.jpg` |
-| 背景与 AI 生图设置截图 | `docs/screenshots/08-background-settings.jpg` |
-| 音乐设置截图 | `docs/screenshots/09-music-settings.jpg` |
-| 渲染进度与下载截图 | `docs/screenshots/10-render-export.jpg` |
-| 完整流程视频 | `docs/videos/01-full-workflow.mp4` |
-| 上传 demo 解析模板视频 | `docs/videos/02-template-analysis.mp4` |
-| 分镜高级设置视频 | `docs/videos/03-shot-customization.mp4` |
-| 导出视频演示 | `docs/videos/04-render-export.mp4` |
-
 ## 页面总览
 
 ![主工作台总览](docs/screenshots/01-main-studio.jpg)
