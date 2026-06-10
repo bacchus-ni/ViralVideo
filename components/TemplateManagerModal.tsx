@@ -1,15 +1,16 @@
 "use client";
 
-import { Image, Music, Sparkles, Upload, X } from "lucide-react";
+import { Sparkles, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { AdvancedTemplateSpec, StyleOptions } from "@/lib/schemas";
-import {
-  backgroundOptions,
-  fontOptions,
-  palettePresets,
-  type PalettePreset,
-} from "@/lib/style-presets";
 import type { TemplatePreset } from "@/lib/templates";
+import { BackgroundSettingsPanel } from "./settings/BackgroundSettingsPanel";
+import { ColorSettingsPanel } from "./settings/ColorSettingsPanel";
+import { MusicSettingsPanel } from "./settings/MusicSettingsPanel";
+import { ProgressBlock, UploadDropzone } from "./settings/SettingControls";
+import { SettingsModal } from "./settings/SettingsModal";
+import { TypographySettingsPanel } from "./settings/TypographySettingsPanel";
+import { mergeStylePatch } from "./settings/settings-utils";
 
 type TemplateManagerModalProps = {
   open: boolean;
@@ -40,17 +41,6 @@ const analyzeSteps = [
   "整理 Remotion 高级模板结构",
 ];
 
-const readFileAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () =>
-      typeof reader.result === "string"
-        ? resolve(reader.result)
-        : reject(new Error("文件读取失败"));
-    reader.onerror = () => reject(reader.error ?? new Error("文件读取失败"));
-    reader.readAsDataURL(file);
-  });
-
 export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   open,
   baseStyle,
@@ -68,6 +58,10 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   const [analyzeProgress, setAnalyzeProgress] = useState(0);
   const [analyzeStepIndex, setAnalyzeStepIndex] = useState(0);
   const [message, setMessage] = useState<string>();
+
+  useEffect(() => {
+    if (open) setStyle(baseStyle);
+  }, [baseStyle, open]);
 
   useEffect(() => {
     if (!isAnalyzing) return undefined;
@@ -88,37 +82,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   if (!open) return null;
 
   const updateStyle = (patch: Partial<StyleOptions>) => {
-    setStyle((current) => ({
-      ...current,
-      ...patch,
-      colors: {
-        ...current.colors,
-        ...(patch.colors ?? {}),
-      },
-    }));
-  };
-
-  const choosePalette = (palette: PalettePreset) => {
-    updateStyle({
-      palette: palette.id as StyleOptions["palette"],
-      colors: palette.colors,
-    });
-  };
-
-  const uploadBackground = async (file: File | undefined) => {
-    if (!file) return;
-    updateStyle({
-      backgroundStyle: "image",
-      backgroundImageUrl: await readFileAsDataUrl(file),
-    });
-  };
-
-  const uploadMusic = async (file: File | undefined) => {
-    if (!file) return;
-    updateStyle({
-      musicUrl: await readFileAsDataUrl(file),
-      musicVolume: style.musicVolume || 0.2,
-    });
+    setStyle((current) => mergeStylePatch(current, patch));
   };
 
   const analyzeVideo = async (file: File | undefined) => {
@@ -141,15 +105,25 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
         throw new Error(payload.error || "解析视频失败");
       }
 
+      const audioPatch = payload.template.extractedAudioUrl
+        ? {
+            musicUrl: payload.template.extractedAudioUrl,
+            musicVolume: payload.template.style?.musicVolume ?? style.musicVolume ?? 0.2,
+          }
+        : {};
+
       setName(payload.template.name || name);
       setDescription(payload.template.description || description);
       setPromptHint(payload.template.promptHint || promptHint);
-      updateStyle(payload.template.style ?? {});
+      updateStyle({
+        ...(payload.template.style ?? {}),
+        ...audioPatch,
+      });
       setAdvancedTemplate(payload.template.advancedTemplate);
       setAdvancedSummary(payload.template.advancedSummary);
       setExtractedAudioUrl(payload.template.extractedAudioUrl);
       setAnalyzeProgress(100);
-      setAnalyzeStepIndex(3);
+      setAnalyzeStepIndex(4);
       setMessage(
         payload.template.extractedAudioUrl
           ? "已根据视频生成模板草稿，并自动提取 demo 音频作为默认背景音乐。"
@@ -207,175 +181,100 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   };
 
   return (
-    <div className="settings-backdrop" role="presentation" onClick={onClose}>
-      <section
-        className="settings-modal template-manager-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="模板管理"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="settings-header">
-          <h3>模板管理</h3>
-          <button type="button" className="icon-button" onClick={onClose}>
-            <X size={18} aria-hidden />
-          </button>
-        </header>
+    <SettingsModal
+      title="模板管理"
+      ariaLabel="模板管理"
+      className="template-manager-modal"
+      onClose={onClose}
+    >
+      <div className="template-manager-grid">
+        <label className="settings-field">
+          <span>模板名称</span>
+          <input value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label className="settings-field">
+          <span>模板说明</span>
+          <input
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </label>
+      </div>
 
-        <div className="settings-content">
-          <div className="template-manager-grid">
-            <label className="settings-field">
-              <span>模板名称</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} />
-            </label>
-            <label className="settings-field">
-              <span>模板说明</span>
-              <input
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-            </label>
+      <label className="settings-field">
+        <span>生成提示</span>
+        <textarea
+          className="manager-textarea"
+          value={promptHint}
+          onChange={(event) => setPromptHint(event.target.value)}
+        />
+      </label>
+
+      <section className="settings-section">
+        <h4>从视频解析模板</h4>
+        <UploadDropzone
+          icon={<Upload size={24} aria-hidden />}
+          label={isAnalyzing ? "解析中..." : "上传 demo 视频并用千问解析"}
+          accept="video/*"
+          disabled={isAnalyzing}
+          onUpload={analyzeVideo}
+        />
+        {isAnalyzing ? (
+          <ProgressBlock
+            title={analyzeSteps[analyzeStepIndex]}
+            value={analyzeProgress}
+            description="千问正在拆解视频节奏、镜头类型、文字动画和模板槽位。"
+          />
+        ) : null}
+        {message ? <p className="manager-message">{message}</p> : null}
+        {extractedAudioUrl ? (
+          <p className="manager-audio-note">
+            demo 原音频已保存为该模板的默认背景音乐。
+          </p>
+        ) : null}
+        {advancedTemplate ? (
+          <div className="advanced-structure-summary">
+            <strong>已解析高级结构</strong>
+            <span>
+              {advancedTemplate.slots.length} 个镜头 · {advancedTemplate.durationSec}s ·{" "}
+              {advancedTemplate.aspectRatio}
+            </span>
+            {advancedSummary ? <p>{advancedSummary.split("\n").slice(0, 4).join(" / ")}</p> : null}
           </div>
-
-          <label className="settings-field">
-            <span>生成提示</span>
-            <textarea
-              className="manager-textarea"
-              value={promptHint}
-              onChange={(event) => setPromptHint(event.target.value)}
-            />
-          </label>
-
-          <div className="settings-section">
-            <h4>从视频解析模板</h4>
-            <label className="upload-dropzone">
-              <Upload size={24} aria-hidden />
-              {isAnalyzing ? "解析中..." : "上传 demo 视频并用千问解析"}
-              <input
-                type="file"
-                accept="video/*"
-                disabled={isAnalyzing}
-                onChange={(event) => analyzeVideo(event.target.files?.[0])}
-              />
-            </label>
-            {isAnalyzing ? (
-              <div className="analysis-progress" role="status" aria-live="polite">
-                <div className="analysis-progress-header">
-                  <span>{analyzeSteps[analyzeStepIndex]}</span>
-                  <strong>{Math.round(analyzeProgress)}%</strong>
-                </div>
-                <div className="analysis-progress-track">
-                  <span style={{ width: `${Math.max(6, analyzeProgress)}%` }} />
-                </div>
-                <p>千问正在拆解视频节奏、镜头类型、文字动画和模板槽位。</p>
-              </div>
-            ) : null}
-            {message ? <p className="manager-message">{message}</p> : null}
-            {extractedAudioUrl ? (
-              <p className="manager-audio-note">
-                demo 原音频已保存为该模板的默认背景音乐。
-              </p>
-            ) : null}
-            {advancedTemplate ? (
-              <div className="advanced-structure-summary">
-                <strong>已解析高级结构</strong>
-                <span>
-                  {advancedTemplate.slots.length} 个镜头 · {advancedTemplate.durationSec}s ·{" "}
-                  {advancedTemplate.aspectRatio}
-                </span>
-                {advancedSummary ? <p>{advancedSummary.split("\n").slice(0, 4).join(" / ")}</p> : null}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="settings-section">
-            <h4>配色</h4>
-            <div className="palette-grid">
-              {palettePresets.map((palette) => (
-                <button
-                  key={palette.id}
-                  type="button"
-                  className="palette-card"
-                  onClick={() => choosePalette(palette)}
-                >
-                  <span className="palette-swatches">
-                    {Object.values(palette.colors).map((color) => (
-                      <i key={color} style={{ backgroundColor: color }} />
-                    ))}
-                  </span>
-                  <strong>{palette.name}</strong>
-                  <small>{palette.description}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="template-manager-grid">
-            <label className="settings-field">
-              <span>字体</span>
-              <select
-                value={style.fontFamily}
-                onChange={(event) =>
-                  updateStyle({ fontFamily: event.target.value as StyleOptions["fontFamily"] })
-                }
-              >
-                {fontOptions.map((font) => (
-                  <option key={font.value} value={font.value}>
-                    {font.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="settings-field">
-              <span>背景</span>
-              <select
-                value={style.backgroundStyle}
-                onChange={(event) =>
-                  updateStyle({
-                    backgroundStyle: event.target.value as StyleOptions["backgroundStyle"],
-                  })
-                }
-              >
-                {backgroundOptions.map((background) => (
-                  <option key={background.value} value={background.value}>
-                    {background.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="template-manager-grid">
-            <label className="upload-dropzone compact-upload">
-              <Image size={20} aria-hidden />
-              上传背景
-              <input type="file" accept="image/*" onChange={(event) => uploadBackground(event.target.files?.[0])} />
-            </label>
-            <label className="upload-dropzone compact-upload">
-              <Music size={20} aria-hidden />
-              上传音乐
-              <input type="file" accept="audio/*" onChange={(event) => uploadMusic(event.target.files?.[0])} />
-            </label>
-          </div>
-
-          <label className="settings-field">
-            <span>音乐音量 {Math.round(style.musicVolume * 100)}%</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={style.musicVolume}
-              onChange={(event) => updateStyle({ musicVolume: Number(event.target.value) })}
-            />
-          </label>
-
-          <button type="button" className="primary-modal-action" onClick={saveTemplate}>
-            <Sparkles size={18} aria-hidden />
-            保存为新模板
-          </button>
-        </div>
+        ) : null}
       </section>
-    </div>
+
+      <section className="settings-section">
+        <ColorSettingsPanel value={style} onChange={updateStyle} showTitle />
+      </section>
+
+      <section className="settings-section">
+        <TypographySettingsPanel value={style} onChange={updateStyle} />
+      </section>
+
+      <section className="settings-section">
+        <BackgroundSettingsPanel
+          mode="style"
+          value={style}
+          onChange={updateStyle}
+          allowAi
+          showTitle
+        />
+      </section>
+
+      <section className="settings-section">
+        <MusicSettingsPanel
+          value={style}
+          onChange={updateStyle}
+          showTitle
+          compactUpload
+        />
+      </section>
+
+      <button type="button" className="primary-modal-action" onClick={saveTemplate}>
+        <Sparkles size={18} aria-hidden />
+        保存为新模板
+      </button>
+    </SettingsModal>
   );
 };
