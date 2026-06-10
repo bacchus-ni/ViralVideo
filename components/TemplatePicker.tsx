@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircle2, Settings2 } from "lucide-react";
+import { CheckCircle2, Settings2, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { TemplatePreset } from "@/lib/templates";
 
 type TemplatePickerProps = {
@@ -8,6 +9,7 @@ type TemplatePickerProps = {
   selectedId: string;
   onSelect: (id: string) => void;
   onManage: () => void;
+  onDelete: (id: string) => void;
 };
 
 export const TemplatePicker: React.FC<TemplatePickerProps> = ({
@@ -15,7 +17,31 @@ export const TemplatePicker: React.FC<TemplatePickerProps> = ({
   selectedId,
   onSelect,
   onManage,
+  onDelete,
 }) => {
+  const [menu, setMenu] = useState<{
+    template: TemplatePreset;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!menu) return undefined;
+    const close = () => setMenu(null);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menu]);
+
   return (
     <aside className="template-panel" aria-label="选择模板">
       <div className="template-heading">
@@ -34,6 +60,14 @@ export const TemplatePicker: React.FC<TemplatePickerProps> = ({
               key={template.id}
               className={`template-card ${selected ? "is-selected" : ""}`}
               onClick={() => onSelect(template.id)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setMenu({
+                  template,
+                  x: Math.min(event.clientX, window.innerWidth - 180),
+                  y: Math.min(event.clientY, window.innerHeight - 58),
+                });
+              }}
               type="button"
             >
               <span className={`template-thumb thumb-${template.thumbnail}`}>
@@ -55,6 +89,27 @@ export const TemplatePicker: React.FC<TemplatePickerProps> = ({
           );
         })}
       </div>
+      {menu ? (
+        <div
+          className="template-context-menu"
+          style={{ left: menu.x, top: menu.y }}
+          role="menu"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="template-context-danger"
+            role="menuitem"
+            onClick={() => {
+              onDelete(menu.template.id);
+              setMenu(null);
+            }}
+          >
+            <Trash2 size={16} aria-hidden />
+            删除模板
+          </button>
+        </div>
+      ) : null}
     </aside>
   );
 };

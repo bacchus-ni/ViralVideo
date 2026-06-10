@@ -33,6 +33,7 @@ type RenderResponse = {
 };
 
 const customTemplateStorageKey = "textMixCustomTemplates";
+const deletedTemplateStorageKey = "textMixDeletedTemplateIds";
 
 const readCustomTemplates = () => {
   if (typeof window === "undefined") return [];
@@ -46,8 +47,23 @@ const readCustomTemplates = () => {
   }
 };
 
+const readDeletedTemplateIds = () => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(deletedTemplateStorageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+};
+
 export const StudioApp: React.FC = () => {
   const [customTemplates, setCustomTemplates] = useState<TemplatePreset[]>([]);
+  const [deletedTemplateIds, setDeletedTemplateIds] = useState<string[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState(defaultPlan.templateId);
   const [style, setStyle] = useState<StyleOptions>(defaultPlan.style);
   const [prompt, setPrompt] = useState("");
@@ -65,6 +81,7 @@ export const StudioApp: React.FC = () => {
 
   useEffect(() => {
     setCustomTemplates(readCustomTemplates());
+    setDeletedTemplateIds(readDeletedTemplateIds());
   }, []);
 
   useEffect(() => {
@@ -82,8 +99,11 @@ export const StudioApp: React.FC = () => {
   }, [isRendering]);
 
   const allTemplates = useMemo(
-    () => [...templates, ...customTemplates],
-    [customTemplates],
+    () =>
+      [...templates, ...customTemplates].filter(
+        (template) => !deletedTemplateIds.includes(template.id),
+      ),
+    [customTemplates, deletedTemplateIds],
   );
 
   const previewPlan = useMemo(
@@ -116,6 +136,12 @@ export const StudioApp: React.FC = () => {
     const next = [template, ...customTemplates].slice(0, 20);
     setCustomTemplates(next);
     window.localStorage.setItem(customTemplateStorageKey, JSON.stringify(next));
+    const restoredDeletedIds = deletedTemplateIds.filter((id) => id !== template.id);
+    setDeletedTemplateIds(restoredDeletedIds);
+    window.localStorage.setItem(
+      deletedTemplateStorageKey,
+      JSON.stringify(restoredDeletedIds),
+    );
     setSelectedTemplateId(template.id);
     setStyle(template.defaultStyle);
     setPlan((current) => ({
@@ -125,6 +151,52 @@ export const StudioApp: React.FC = () => {
       advancedTemplate: template.advancedTemplate,
     }));
     setSourceLabel(`已创建并选择「${template.name}」模板`);
+  };
+
+  const deleteTemplate = (id: string) => {
+    const templateToDelete = allTemplates.find((template) => template.id === id);
+    if (!templateToDelete) return;
+    const confirmed = window.confirm(`确定删除「${templateToDelete.name}」模板吗？`);
+    if (!confirmed) return;
+
+    const nextCustomTemplates = customTemplates.filter(
+      (template) => template.id !== id,
+    );
+    const isPresetTemplate = templates.some((template) => template.id === id);
+    const nextDeletedTemplateIds = isPresetTemplate
+      ? Array.from(new Set([...deletedTemplateIds, id]))
+      : deletedTemplateIds.filter((templateId) => templateId !== id);
+    const nextTemplates = [...templates, ...nextCustomTemplates].filter(
+      (template) => !nextDeletedTemplateIds.includes(template.id),
+    );
+
+    setCustomTemplates(nextCustomTemplates);
+    setDeletedTemplateIds(nextDeletedTemplateIds);
+    window.localStorage.setItem(
+      customTemplateStorageKey,
+      JSON.stringify(nextCustomTemplates),
+    );
+    window.localStorage.setItem(
+      deletedTemplateStorageKey,
+      JSON.stringify(nextDeletedTemplateIds),
+    );
+
+    if (selectedTemplateId === id) {
+      const fallbackTemplate = nextTemplates[0] ?? templates[0];
+      setSelectedTemplateId(fallbackTemplate.id);
+      setStyle(fallbackTemplate.defaultStyle);
+      setPlan((current) => ({
+        ...current,
+        templateId: fallbackTemplate.id,
+        style: fallbackTemplate.defaultStyle,
+        advancedTemplate: fallbackTemplate.advancedTemplate,
+      }));
+      setSourceLabel(`已删除「${templateToDelete.name}」，并切换到「${fallbackTemplate.name}」模板`);
+    } else {
+      setSourceLabel(`已删除「${templateToDelete.name}」模板`);
+    }
+    setDownloadUrl(undefined);
+    setWarning(undefined);
   };
 
   const updateStyle = (nextStyle: StyleOptions) => {
@@ -228,6 +300,7 @@ export const StudioApp: React.FC = () => {
         selectedId={selectedTemplateId}
         onSelect={selectTemplate}
         onManage={() => setIsTemplateManagerOpen(true)}
+        onDelete={deleteTemplate}
       />
 
       <div className="workspace">
