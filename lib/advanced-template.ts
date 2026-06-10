@@ -445,10 +445,20 @@ export const normalizeAdvancedTemplate = (
   });
 };
 
+// 文案、槽位对齐和渲染端共用的单镜头字数上限：
+// 转场占位保持极短，其余槽位至少给 12 字，保证能放下一个完整短句
+export const getSlotReadableLimit = (slot: TemplateSlot) => {
+  if (slot.textRole === "filler" || slot.sceneType === "blank-color") {
+    return Math.max(4, Math.min(36, slot.maxChars ?? 4));
+  }
+
+  return Math.max(12, Math.min(36, slot.maxChars ?? 36));
+};
+
 export const summarizeAdvancedTemplate = (template: AdvancedTemplateSpec) =>
   template.slots
     .map(
       (slot, index) =>
-        `${index + 1}. ${slot.sceneType} / ${slot.textRole} / ${slot.durationSec}s / ${slot.motion.entrance} / 默认文字：${slot.defaultText}`,
+        `${index + 1}. ${slot.sceneType} / ${slot.textRole} / ${slot.durationSec}s / ${slot.motion.entrance} / 最多${getSlotReadableLimit(slot)}字 / 默认文字：${slot.defaultText}`,
     )
     .join("\n");

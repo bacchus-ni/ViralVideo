@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { getSlotReadableLimit } from "../../lib/advanced-template";
 import type { StyleOptions, TemplateSlot } from "../../lib/schemas";
 import {
   AbsoluteFill,
@@ -446,7 +447,7 @@ const LetterScatterScene: React.FC<SceneProps> = ({
   baseFontSize,
 }) => {
   const frame = useCurrentFrame();
-  const chars = Array.from(text).slice(0, slot.maxChars ?? 8);
+  const chars = Array.from(text).slice(0, getSlotReadableLimit(slot));
   const settled = clamp(frame, [0, Math.min(10, durationFrames * 0.62)], [0, 1], backOut);
   const foreground = resolveForeground(slot, styleOptions);
 
@@ -636,7 +637,7 @@ export const KineticTextScene: React.FC<{
   const { width, height } = useVideoConfig();
   const baseFontSize = Math.min(width, height) * (styleOptions.fontSize / 1080);
   const safeText = Array.from(text.trim() || slot.defaultText)
-    .slice(0, slot.maxChars ?? 36)
+    .slice(0, getSlotReadableLimit(slot))
     .join("");
   const frame = useCurrentFrame();
   const flash =

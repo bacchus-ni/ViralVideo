@@ -4,11 +4,11 @@ import {
   type AdvancedTemplateSpec,
   type SceneType,
   type StoryboardShot,
-  type TemplateSlot,
   type VideoPlan,
   videoPlanSchema,
 } from "@/lib/schemas";
 import {
+  getSlotReadableLimit,
   getTemplateDuration,
   reflowTemplateSlots,
   summarizeAdvancedTemplate,
@@ -127,12 +127,32 @@ const pickEnum = <T extends readonly string[]>(
   return fallback;
 };
 
+const boundaryChars = new Set([
+  "，", "。", "、", "；", "！", "？", "…", " ", ",", ".", ";", "!", "?",
+]);
+
+// 超长时优先在标点处截断，避免把短句从词语中间剁断（如"创新永不止步"→"创新永不"）
+const truncateAtBoundary = (value: string, limit: number) => {
+  const chars = Array.from(value);
+  if (chars.length <= limit) return value;
+  const head = chars.slice(0, limit);
+  for (let i = head.length - 1; i >= Math.floor(limit / 2); i -= 1) {
+    if (boundaryChars.has(head[i])) {
+      return head.slice(0, i).join("").trim();
+    }
+  }
+  return head.join("");
+};
+
+// 只剥列表序号（"1."、"2、"），不能把 \d 放进字符类——会把"1984年"剥成"年"
 const cleanLine = (value: string) =>
-  value
-    .replace(/^[\s\-*•·、\d.）)]+/, "")
-    .replace(/^镜头\s*\d+\s*[:：-]?/, "")
-    .trim()
-    .slice(0, 36);
+  truncateAtBoundary(
+    value
+      .replace(/^\s*(?:[-*•·、]+|\d{1,3}\s*[.、．）)])\s*/, "")
+      .replace(/^镜头\s*\d+\s*[:：-]?/, "")
+      .trim(),
+    36,
+  );
 
 const textLength = (value: string) =>
   value.replace(/[\s，。,.!！?？:：;；"'“”‘’\-_/\\|()[\]{}]/g, "").length;
@@ -321,14 +341,6 @@ const buildStoryboardFromScript = (
   });
 };
 
-const getSlotReadableLimit = (slot: TemplateSlot) => {
-  if (slot.textRole === "filler" || slot.sceneType === "blank-color") {
-    return Math.max(4, Math.min(36, slot.maxChars ?? 4));
-  }
-
-  return Math.max(12, Math.min(36, slot.maxChars ?? 36));
-};
-
 const splitLines = (value: string) => {
   const lines = value
     .split(/\n+/)
@@ -365,7 +377,7 @@ const normalizeEmphasis = (value: unknown) => {
   return [];
 };
 
-const normalizeScript = (rawScript: unknown, fallback: VideoPlan) => {
+const normalizeScript = (rawScript: unknown, userPrompt: string) => {
   const lines = Array.isArray(rawScript)
     ? rawScript
         .map((item, index) => {
@@ -373,17 +385,16 @@ const normalizeScript = (rawScript: unknown, fallback: VideoPlan) => {
             return {
               id: `line-${index + 1}`,
               text: cleanLine(item),
-              emphasis: [],
+              emphasis: [] as string[],
             };
           }
 
           if (isRecord(item)) {
             return {
               id: pickString(item.id) ?? `line-${index + 1}`,
-              text:
-                pickString(item.text, item.content, item.line, item.copy) ??
-                fallback.script[index]?.text ??
-                `文案${index + 1}`,
+              text: cleanLine(
+                pickString(item.text, item.content, item.line, item.copy) ?? "",
+              ),
               emphasis: normalizeEmphasis(item.emphasis),
             };
           }
@@ -397,19 +408,21 @@ const normalizeScript = (rawScript: unknown, fallback: VideoPlan) => {
       ? splitLines(rawScript).map((text, index) => ({
           id: `line-${index + 1}`,
           text,
-          emphasis: [],
+          emphasis: [] as string[],
         }))
       : [];
 
+  // 行数不足时用主题相关的可读兜底补齐，不要混入与主题无关的默认励志文案
+  const padTexts = buildReadableFallbackTexts(userPrompt, 3);
   const merged = [...lines];
-  for (const fallbackLine of fallback.script) {
+  for (const text of padTexts) {
     if (merged.length >= 3) break;
-    merged.push(fallbackLine);
+    merged.push({ id: `line-${merged.length + 1}`, text, emphasis: [] });
   }
 
   return merged.slice(0, 24).map((line, index) => ({
     id: line.id || `line-${index + 1}`,
-    text: cleanLine(line.text) || fallback.script[index]?.text || "继续向前",
+    text: line.text || padTexts[index % padTexts.length],
     emphasis: line.emphasis ?? [],
   }));
 };
@@ -485,7 +498,8 @@ const normalizeStoryboard = (
   return normalized.slice(0, 24).map((shot, index) => ({
     ...shot,
     id: shot.id || `shot-${index + 1}`,
-    text: cleanLine(shot.text) || script[index]?.text || fallback.script[index]?.text,
+    text:
+      cleanLine(shot.text) || script[Math.min(index, script.length - 1)].text,
   }));
 };
 
@@ -509,7 +523,10 @@ const alignPlanToAdvancedTemplate = (
       shouldRepairFragments && isTextFragment(candidate)
         ? readableFallbackTexts[index]
         : candidate;
-    const text = cleanLine(repairedText).slice(0, getSlotReadableLimit(slot));
+    const text = truncateAtBoundary(
+      cleanLine(repairedText),
+      getSlotReadableLimit(slot),
+    );
 
     return {
       id: existingLine?.id || `line-${index + 1}`,
@@ -573,7 +590,7 @@ const normalizeDeepSeekPlan = (
     ? Math.min(24, advancedTemplate.slots.length)
     : narrativeLines.length || undefined;
   const script = repairScript(
-    normalizeScript(narrativeLines.length ? narrativeLines : raw.script, fallback),
+    normalizeScript(narrativeLines.length ? narrativeLines : raw.script, userPrompt),
     userPrompt,
     desiredCount,
   );
