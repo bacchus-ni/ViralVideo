@@ -44,9 +44,6 @@ docs/videos/       # 放视频演示
 - 中间是创作区：输入自然语言需求，查看和编辑 AI 生成结果，打开配色、音乐、背景、比例设置。
 - 右侧是预览与导出区：Remotion Player 实时预览，支持网页静音、渲染进度、导出后下载 MP4。
 
-完整演示视频占位：
-
-<video controls src="docs/videos/01-full-workflow.mp4"></video>
 
 ## 核心工作流
 
@@ -87,8 +84,6 @@ docs/videos/       # 放视频演示
 
 模板支持右键删除。删除自定义模板会从本地模板记录中移除；删除预设模板会把模板 ID 写入本地隐藏列表，后续刷新页面也不会再显示。
 
-![模板选择与右键删除](docs/screenshots/01-main-studio.jpg)
-
 ## 2. 管理模板
 
 点击左侧「管理模板」可以打开模板管理窗口。这里支持两种创建方式：
@@ -98,7 +93,7 @@ docs/videos/       # 放视频演示
 
 模板管理窗口中的配色、字体、背景、音乐设置与主工作台共用同一套组件，所以能力是一致的：可以选择预设，也可以上传背景/音乐，背景还可以调用千问文生图模型生成。
 
-![上传 demo 视频解析模板](docs/screenshots/02-template-video-upload.jpg)
+![上传 demo 视频解析模板](docs/screenshots/02-template-video-upload.png)
 
 上传 demo 后，页面会显示解析进度，当前步骤包括：
 
@@ -108,8 +103,6 @@ docs/videos/       # 放视频演示
 - 识别镜头、转场和文字动画。
 - 整理 Remotion 高级模板结构。
 
-![千问解析进度](docs/screenshots/03-template-analysis-progress.jpg)
-
 解析成功后会得到：
 
 - 模板名称、模板说明和生成提示。
@@ -117,7 +110,6 @@ docs/videos/       # 放视频演示
 - 高级模板结构，包括镜头槽位、时长、起始时间、场景类型、文字角色、布局、运动、背景、转场。
 - 从 demo 视频抽取出的音频文件，并自动作为该模板默认背景音乐。
 
-模板解析演示视频占位：
 
 <video controls src="docs/videos/02-template-analysis.mp4"></video>
 
@@ -126,8 +118,7 @@ docs/videos/       # 放视频演示
 在「描述需求」区域输入自然语言即可，例如：
 
 ```txt
-做一个 20 秒的小红书治愈短视频，主题是自律不是苦行，而是对未来的温柔。
-语气温暖，分镜节奏不要太快。
+介绍皮克斯公司
 ```
 
 点击「让 AI 生成」后，系统会把以下信息一起传给 DeepSeek：
@@ -138,9 +129,9 @@ docs/videos/       # 放视频演示
 - 用户输入的自然语言需求。
 - 当前页面里的配色、字体、背景、音乐、比例等样式设置。
 
-DeepSeek 返回后，本地会通过 Zod schema 做结构化校验和归一化。如果 DeepSeek 不可用或返回异常，页面会自动使用本地兜底示例，方便继续调 UI 和预览。
+DeepSeek 返回后，本地会通过 Zod schema 做结构化校验和归一化。
 
-![AI 生成文案和分镜](docs/screenshots/04-ai-plan-result.jpg)
+<video controls src="docs/videos/03-generate-scripts-and-storyboards.mp4"></video>
 
 ## 4. 编辑完整文案
 
@@ -155,7 +146,7 @@ AI 生成结果里的「文案」是一个完整的大编辑框，而不是拆�
 
 编辑文案后，系统会同步更新 script 和 storyboard，并重新计算镜头时间线。
 
-![完整文案编辑](docs/screenshots/05-script-editing.jpg)
+![完整文案编辑](docs/screenshots/05-script-editing.gif)
 
 ## 5. 生成并编辑分镜
 
@@ -167,7 +158,7 @@ AI 生成结果里的「文案」是一个完整的大编辑框，而不是拆�
 
 基础分镜会渲染为普通纯文本镜头；如果模板包含高级结构，则会尽量按高级槽位渲染出更复杂的 kinetic typography 动效。
 
-![分镜列表](docs/screenshots/04-ai-plan-result.jpg)
+![分镜列表](docs/screenshots/04-ai-plan-result.png)
 
 ## 6. 单镜头高级设置
 
@@ -196,8 +187,6 @@ AI 生成结果里的「文案」是一个完整的大编辑框，而不是拆�
 
 支持的高级入场和强调效果包括擦入、冲击、滑入、缩放、散开、打字、抖动、闪白、倾斜、裁切、描边和阵列。
 
-![单镜头高级设置](docs/screenshots/06-shot-advanced-settings.jpg)
-
 分镜高级设置演示视频占位：
 
 <video controls src="docs/videos/03-shot-customization.mp4"></video>
@@ -218,7 +207,7 @@ AI 生成结果里的「文案」是一个完整的大编辑框，而不是拆�
 - 字号不是强制所有文字同一个固定值，而是控制整体文字规模，具体镜头仍会根据布局和模板效果做适配。
 - 支持字重调节，用于控制标题冲击力。
 
-![配色与字体设置](docs/screenshots/07-color-typography-settings.jpg)
+![配色与字体设置](docs/screenshots/07-color-typography-settings.gif)
 
 ## 8. 背景设置与 AI 生图
 
@@ -233,7 +222,7 @@ AI 生成结果里的「文案」是一个完整的大编辑框，而不是拆�
 
 AI 背景图会调用后端 `/api/generate-background-image`，生成成功后保存到 `public/generated-backgrounds/`，并立即应用到右侧预览和最终导出。
 
-![背景与 AI 生图设置](docs/screenshots/08-background-settings.jpg)
+![背景与 AI 生图设置](docs/screenshots/08-background-settings.gif)
 
 ## 9. 音乐设置与网页静音
 
@@ -255,7 +244,8 @@ AI 背景图会调用后端 `/api/generate-background-image`，生成成功后�
 
 右侧预览区还有一个「网页静音 / 预览有声」按钮。这个按钮只影响浏览器里的预览播放，不会改变导出视频中的声音。
 
-![音乐设置](docs/screenshots/09-music-settings.jpg)
+
+<video controls src="docs/videos/09-music-settings.mp4"></video>
 
 ## 10. 比例、分辨率与实时预览
 
@@ -277,6 +267,8 @@ AI 背景图会调用后端 `/api/generate-background-image`，生成成功后�
 
 右侧 Remotion Player 会根据当前比例和分辨率实时调整预览画布。所有文案、分镜、配色、字体、背景、音乐和高级镜头设置都会反映到预览里。
 
+![比例与分辨率设置](docs/screenshots/09-ratio-and-resolution.png)
+
 ## 11. 生成并导出视频
 
 点击右侧「生成视频」后，页面会调用 `/api/render-video`，使用 Remotion 在本地渲染 MP4。
@@ -290,9 +282,6 @@ AI 背景图会调用后端 `/api/generate-background-image`，生成成功后�
 
 渲染完成后会出现下载入口。导出视频会写入 `public/renders/`，页面返回可下载链接。
 
-![渲染进度与下载](docs/screenshots/10-render-export.jpg)
-
-导出视频演示占位：
 
 <video controls src="docs/videos/04-render-export.mp4"></video>
 
