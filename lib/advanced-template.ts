@@ -85,6 +85,18 @@ const pickEnum = <T extends readonly string[]>(
 const normalizeText = (value: unknown, fallback: string, maxChars = 36) =>
   pickString(value, fallback)?.replace(/\s+/g, " ").slice(0, maxChars) ?? fallback;
 
+const minReadableMaxChars = (
+  sceneType: SceneType,
+  textRole: TemplateSlot["textRole"],
+) => {
+  if (sceneType === "blank-color" || textRole === "filler") return 2;
+  if (sceneType === "letter-scatter") return 4;
+  if (sceneType === "logo-hold" || textRole === "brand" || textRole === "ending") {
+    return 10;
+  }
+  return 8;
+};
+
 const normalizeEmphasis = (value: unknown): TemplateSlot["motion"]["emphasis"] => {
   const source = Array.isArray(value)
     ? value
@@ -198,13 +210,27 @@ export const normalizeAdvancedTemplate = (
       const background = isRecord(item.background) ? item.background : {};
       const motion = isRecord(item.motion) ? item.motion : {};
       const layout = isRecord(item.layout) ? item.layout : {};
+      const textRole =
+        pickEnum(
+          ["hook", "keyword", "point", "brand", "ending", "filler"] as const,
+          item.textRole ?? item.role,
+          roleCycle[index % roleCycle.length],
+        ) ?? "point";
+      const maxChars =
+        pickClampedNumber(
+          minReadableMaxChars(sceneType, textRole),
+          80,
+          36,
+          item.maxChars,
+          item.maxLength,
+        ) ?? 36;
       const defaultText =
         normalizeText(
           item.defaultText ?? item.text ?? item.caption ?? item.title,
           ["开场", "观点", "重点", "冲击", "节奏", "归位", "标题", "收束"][
             index % 8
           ],
-          pickNumber(item.maxChars) ?? 36,
+          maxChars,
         ) || `镜头${index + 1}`;
       const duration = pickClampedNumber(
         0.3,
@@ -220,15 +246,9 @@ export const normalizeAdvancedTemplate = (
         startSec: pickNumber(item.startSec, item.start, index * defaultDuration) ?? 0,
         durationSec: duration,
         sceneType,
-        textRole:
-          pickEnum(
-            ["hook", "keyword", "point", "brand", "ending", "filler"] as const,
-            item.textRole ?? item.role,
-            roleCycle[index % roleCycle.length],
-          ) ?? "point",
+        textRole,
         defaultText,
-        maxChars:
-          pickClampedNumber(1, 80, 36, item.maxChars, item.maxLength) ?? 36,
+        maxChars,
         visualDescription:
           pickString(
             item.visualDescription,

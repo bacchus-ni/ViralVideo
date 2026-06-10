@@ -4,6 +4,7 @@ import {
   type AdvancedTemplateSpec,
   type SceneType,
   type StoryboardShot,
+  type TemplateSlot,
   type VideoPlan,
   videoPlanSchema,
 } from "@/lib/schemas";
@@ -54,7 +55,7 @@ const systemPrompt = `你是一个短视频纯文本混剪策划助手。
 要求：
 1. 只输出 JSON，不要输出 Markdown。
 2. 视频以文字表现为主，不要依赖复杂实拍素材。
-3. 每句文案要短，适合屏幕大字展示。
+3. 每句文案要短但必须完整可读，适合屏幕大字展示。
 4. 分镜说明要描述背景、文字入场、节奏和强调词。
 5. durationSec 必须在 10 到 45 秒之间。
 6. storyboard 中每个镜头必须包含 startSec、durationSec、text、visualDescription、animation。
@@ -63,7 +64,9 @@ const systemPrompt = `你是一个短视频纯文本混剪策划助手。
 9. 输出字段必须符合 VideoPlan：title、platform、durationSec、tone、templateId、script、storyboard、style。
 10. script 必须是数组，不要输出字符串。script 数组元素格式：{"id":"line-1","text":"短句","emphasis":["关键词"]}。
 11. storyboard 必须是数组，每个元素都必须有 id，例如 shot-1、shot-2。
-12. 如果用户提供高级模板槽位，script 和 storyboard 数量要与槽位数量一致，逐槽位填充文字和画面说明。`;
+12. 如果用户提供高级模板槽位，script 和 storyboard 数量要与槽位数量一致，逐槽位填充文字和画面说明。
+13. 禁止输出单字、残词或孤立关键词堆砌；除转场占位外，每条 text 应是 4 到 14 个中文字符的完整短句。
+14. 如果用户需求是科普、讲解、介绍类主题，文案必须形成清晰的信息递进，而不是只列名词。`;
 
 const extractJson = (content: string) => {
   const trimmed = content.trim();
@@ -127,6 +130,67 @@ const cleanLine = (value: string) =>
     .replace(/^镜头\s*\d+\s*[:：-]?/, "")
     .trim()
     .slice(0, 36);
+
+const textLength = (value: string) =>
+  value.replace(/[\s，。,.!！?？:：;；"'“”‘’\-_/\\|()[\]{}]/g, "").length;
+
+const isTextFragment = (value: string) => textLength(value) <= 2;
+
+const hasTooManyFragments = (texts: string[]) => {
+  if (texts.length < 6) return false;
+  const fragments = texts.filter(isTextFragment).length;
+  const singleChars = texts.filter((text) => textLength(text) <= 1).length;
+  return fragments / texts.length >= 0.42 || singleChars / texts.length >= 0.18;
+};
+
+const inferSubject = (prompt: string) => {
+  const cleaned = prompt
+    .replace(
+      /请|帮我|帮忙|我想|做一个|生成|制作|输出|写一个|写一段|视频|短视频|文案|分镜|主题是|关于|科普|介绍|讲解|说明|一下/g,
+      " ",
+    )
+    .replace(/[，。,.!！?？:：;；"'“”‘’\-_/\\|()[\]{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned.slice(0, 12) || "这个主题";
+};
+
+const buildReadableFallbackTexts = (prompt: string, count: number) => {
+  const subject = inferSubject(prompt);
+  const lines = [
+    `${subject}是谁`,
+    "从技术团队起步",
+    "用电脑改写动画",
+    "长片成为转折点",
+    "故事永远排第一",
+    "技术服务于情感",
+    "角色必须可信",
+    "表情都被设计",
+    "光影让世界真实",
+    "渲染撑起想象力",
+    "短片就是实验场",
+    "团队反复打磨",
+    "创意来自提问",
+    "失败也会重写",
+    `${subject}重塑动画`,
+    "让孩子看见梦",
+    "也让大人被打动",
+    "动画不只是画面",
+    "它是技术和故事",
+    `${subject}仍在进化`,
+  ].map(cleanLine);
+
+  return Array.from({ length: count }, (_, index) => lines[index % lines.length]);
+};
+
+const getSlotReadableLimit = (slot: TemplateSlot) => {
+  if (slot.textRole === "filler" || slot.sceneType === "blank-color") {
+    return Math.max(4, Math.min(36, slot.maxChars ?? 4));
+  }
+
+  return Math.max(12, Math.min(36, slot.maxChars ?? 36));
+};
 
 const splitLines = (value: string) => {
   const lines = value
@@ -291,19 +355,28 @@ const normalizeStoryboard = (
 const alignPlanToAdvancedTemplate = (
   plan: VideoPlan,
   advancedTemplate: AdvancedTemplateSpec,
+  userPrompt: string,
 ): VideoPlan => {
   const slots = reflowTemplateSlots(advancedTemplate.slots);
   const durationSec = getTemplateDuration(slots, advancedTemplate.durationSec);
+  const generatedTexts = plan.script.map((line) => line.text);
+  const shouldRepairFragments = hasTooManyFragments(generatedTexts);
+  const readableFallbackTexts = buildReadableFallbackTexts(userPrompt, slots.length);
   const script = slots.map((slot, index) => {
     const existingLine = plan.script[index];
     const existingShot = plan.storyboard[index];
-    const text = cleanLine(
+    const candidate = cleanLine(
       existingLine?.text || existingShot?.text || slot.defaultText,
-    ).slice(0, Math.min(36, slot.maxChars ?? 36));
+    );
+    const repairedText =
+      shouldRepairFragments && isTextFragment(candidate)
+        ? readableFallbackTexts[index]
+        : candidate;
+    const text = cleanLine(repairedText).slice(0, getSlotReadableLimit(slot));
 
     return {
       id: existingLine?.id || `line-${index + 1}`,
-      text: text || slot.defaultText.slice(0, 36),
+      text: text || readableFallbackTexts[index] || slot.defaultText.slice(0, 36),
       emphasis:
         existingLine?.emphasis?.length
           ? existingLine.emphasis
@@ -353,6 +426,7 @@ const normalizeDeepSeekPlan = (
   fallback: VideoPlan,
   templateId: string,
   requestStyle: GeneratePlanRequest["style"],
+  userPrompt: string,
   advancedTemplate?: AdvancedTemplateSpec,
 ) => {
   const raw = isRecord(parsed) ? parsed : {};
@@ -460,7 +534,7 @@ const normalizeDeepSeekPlan = (
   };
 
   return advancedTemplate
-    ? alignPlanToAdvancedTemplate(plan, advancedTemplate)
+    ? alignPlanToAdvancedTemplate(plan, advancedTemplate, userPrompt)
     : plan;
 };
 
@@ -482,7 +556,7 @@ export const generatePlanWithDeepSeek = async (
     advancedTemplate,
   };
   const advancedPrompt = advancedTemplate
-    ? `高级模板槽位如下。必须按槽位顺序输出 ${advancedTemplate.slots.length} 条 script 和 storyboard，不要改变槽位数量；每条文案尽量短，适配对应 sceneType。分镜 durationSec 和 startSec 参考槽位即可。
+    ? `高级模板槽位如下。必须按槽位顺序输出 ${advancedTemplate.slots.length} 条 script 和 storyboard，不要改变槽位数量；每条文案要短但必须是完整语义短句，适配对应 sceneType。不要因为槽位很短就输出单字、残词、孤立名词。分镜 durationSec 和 startSec 参考槽位即可。
 ${summarizeAdvancedTemplate(advancedTemplate)}`
     : "当前是基础模板，按普通纯文本分镜生成。";
 
@@ -494,6 +568,12 @@ ${summarizeAdvancedTemplate(advancedTemplate)}`
 用户可选样式：${JSON.stringify(request.style ?? {})}
 ${advancedPrompt}
 用户需求：${request.userPrompt}
+
+内容质量要求：
+- text 必须是能直接给观众看的完整短句，不要输出「皮」「感」「创」这类单字。
+- 不要把科普主题拆成孤立关键词列表，例如只输出「创新」「故事」「技术」是不合格的。
+- 科普/介绍类视频要按“是什么 -> 为什么重要 -> 代表作品/技术 -> 影响/结论”的顺序递进。
+- 如果高级模板槽位很多，可以用更短的完整短句，但仍要保证每句有明确意思。
 
 请生成 VideoPlan JSON。style 必须使用这些枚举：
 palette: gold | blue | white | dark | fresh | macaron | custom
@@ -553,6 +633,7 @@ resolution: 720p | 1080p | 2k | custom
     fallback,
     request.templateId,
     request.style,
+    request.userPrompt,
     advancedTemplate,
   );
   const plan = videoPlanSchema.parse(normalized);
