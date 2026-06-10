@@ -747,6 +747,12 @@ button:disabled {
   font-size: 20px;
 }
 
+.settings-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .settings-content {
   display: flex;
   flex-direction: column;
@@ -1225,6 +1231,11 @@ button:disabled {
   color: #fff;
   padding: 0 18px;
   font-weight: 900;
+}
+
+.settings-header-actions .primary-modal-action {
+  min-height: 38px;
+  padding: 0 14px;
 }
 
 .preview-panel {

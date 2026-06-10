@@ -185,6 +185,12 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
       title="模板管理"
       ariaLabel="模板管理"
       className="template-manager-modal"
+      headerAction={
+        <button type="button" className="primary-modal-action" onClick={saveTemplate}>
+          <Sparkles size={18} aria-hidden />
+          保存为新模板
+        </button>
+      }
       onClose={onClose}
     >
       <div className="template-manager-grid">
@@ -271,10 +277,6 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
         />
       </section>
 
-      <button type="button" className="primary-modal-action" onClick={saveTemplate}>
-        <Sparkles size={18} aria-hidden />
-        保存为新模板
-      </button>
     </SettingsModal>
   );
 };

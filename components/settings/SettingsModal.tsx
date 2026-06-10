@@ -8,6 +8,7 @@ type SettingsModalProps = {
   ariaLabel?: string;
   className?: string;
   contentClassName?: string;
+  headerAction?: ReactNode;
   children: ReactNode;
   onClose: () => void;
 };
@@ -17,6 +18,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   ariaLabel,
   className,
   contentClassName,
+  headerAction,
   children,
   onClose,
 }) => (
@@ -30,9 +32,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     >
       <header className="settings-header">
         <h3>{title}</h3>
-        <button type="button" className="icon-button" onClick={onClose}>
-          <X size={18} aria-hidden />
-        </button>
+        <div className="settings-header-actions">
+          {headerAction}
+          <button type="button" className="icon-button" onClick={onClose}>
+            <X size={18} aria-hidden />
+          </button>
+        </div>
       </header>
       <div className={`settings-content ${contentClassName ?? ""}`.trim()}>
         {children}
