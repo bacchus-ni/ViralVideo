@@ -68,6 +68,7 @@ const resolveBackground = (slot: TemplateSlot, styleOptions: StyleOptions) =>
   styleOptions.colors.background;
 
 const resolveForeground = (slot: TemplateSlot, styleOptions: StyleOptions) => {
+  if (slot.textColor) return slot.textColor;
   const background = resolveBackground(slot, styleOptions).toLowerCase();
   if (background === styleOptions.colors.accent.toLowerCase()) {
     return styleOptions.colors.surface;

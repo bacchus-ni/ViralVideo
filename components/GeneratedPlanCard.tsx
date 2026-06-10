@@ -1,9 +1,10 @@
 "use client";
 
-import { Clipboard, ListVideo, Sparkles } from "lucide-react";
+import { Clipboard, ListVideo, Settings2, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   advancedMotionEntrances,
+  advancedMotionEmphasis,
   advancedSceneTypes,
   type SceneType,
   type StoryboardShot,
@@ -50,6 +51,46 @@ const entranceLabels: Record<TemplateSlot["motion"]["entrance"], string> = {
   scatter: "散开",
   typewriter: "打字",
   none: "无",
+};
+
+const emphasisLabels: Record<TemplateSlot["motion"]["emphasis"][number], string> = {
+  jitter: "抖动",
+  flash: "闪白",
+  skew: "倾斜",
+  "clip-split": "裁切",
+  outline: "描边",
+  "repeat-rows": "阵列",
+};
+
+const backgroundTypeOptions: Array<{
+  label: string;
+  value: NonNullable<StoryboardShot["advancedSettings"]>["backgroundType"];
+}> = [
+  { label: "跟随全局", value: "inherit" },
+  { label: "纯色", value: "solid" },
+  { label: "渐变", value: "gradient" },
+  { label: "粒子", value: "particles" },
+  { label: "图片", value: "image" },
+];
+
+const effectOptions: Array<{
+  label: string;
+  value: NonNullable<StoryboardShot["advancedSettings"]>["effect"];
+}> = [
+  { label: "无", value: "none" },
+  { label: "闪白", value: "flash" },
+  { label: "抖动", value: "jitter" },
+  { label: "描边", value: "outline" },
+  { label: "发光", value: "glow" },
+];
+
+const effectToEmphasis = (
+  effect: NonNullable<StoryboardShot["advancedSettings"]>["effect"],
+) => {
+  if (effect === "flash") return "flash";
+  if (effect === "jitter") return "jitter";
+  if (effect === "outline") return "outline";
+  return undefined;
 };
 
 const recalculateTiming = (plan: VideoPlan): VideoPlan => {
@@ -110,10 +151,17 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
   onChange,
 }) => {
   const [activeTab, setActiveTab] = useState<"script" | "storyboard">("script");
+  const [advancedShotIndex, setAdvancedShotIndex] = useState<number | null>(null);
   const scriptText = useMemo(
     () => plan.script.map((line) => line.text).join("\n"),
     [plan.script],
   );
+  const activeShot =
+    advancedShotIndex === null ? undefined : plan.storyboard[advancedShotIndex];
+  const activeSlot =
+    advancedShotIndex === null
+      ? undefined
+      : plan.advancedTemplate?.slots[advancedShotIndex];
 
   const copyScript = async () => {
     await navigator.clipboard.writeText(scriptText);
@@ -218,6 +266,74 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
     });
   };
 
+  const updateShotAdvancedSettings = (
+    index: number,
+    patch: Partial<NonNullable<StoryboardShot["advancedSettings"]>>,
+  ) => {
+    const current = plan.storyboard[index]?.advancedSettings ?? {};
+    updateStoryboardShot(index, {
+      advancedSettings: {
+        ...current,
+        ...patch,
+      },
+    });
+  };
+
+  const updateShotEffect = (
+    index: number,
+    effect: NonNullable<StoryboardShot["advancedSettings"]>["effect"],
+  ) => {
+    updateShotAdvancedSettings(index, { effect });
+    if (!plan.advancedTemplate?.slots[index]) return;
+    const mapped = effectToEmphasis(effect);
+    const current = plan.advancedTemplate.slots[index].motion.emphasis;
+    const preserved = current.filter(
+      (item) => !["flash", "jitter", "outline"].includes(item),
+    );
+    updateAdvancedSlot(index, {
+      motion: {
+        ...plan.advancedTemplate.slots[index].motion,
+        emphasis: mapped ? [...preserved, mapped] : preserved,
+      },
+    });
+  };
+
+  const updateShotBackground = (
+    index: number,
+    patch: Partial<NonNullable<StoryboardShot["advancedSettings"]>>,
+  ) => {
+    updateShotAdvancedSettings(index, patch);
+    const nextType = patch.backgroundType;
+    const slot = plan.advancedTemplate?.slots[index];
+    if (!slot) return;
+    updateAdvancedSlot(index, {
+      background: {
+        ...slot.background,
+        ...(nextType && nextType !== "inherit" ? { type: nextType } : {}),
+        ...(patch.backgroundColor ? { color: patch.backgroundColor } : {}),
+        ...(patch.accentColor ? { accentColor: patch.accentColor } : {}),
+        ...(patch.backgroundImageUrl ? { imageUrl: patch.backgroundImageUrl } : {}),
+      },
+    });
+  };
+
+  const toggleAdvancedEmphasis = (
+    index: number,
+    emphasis: TemplateSlot["motion"]["emphasis"][number],
+  ) => {
+    if (!plan.advancedTemplate?.slots[index]) return;
+    const slot = plan.advancedTemplate.slots[index];
+    const hasEmphasis = slot.motion.emphasis.includes(emphasis);
+    updateAdvancedSlot(index, {
+      motion: {
+        ...slot.motion,
+        emphasis: hasEmphasis
+          ? slot.motion.emphasis.filter((item) => item !== emphasis)
+          : [...slot.motion.emphasis, emphasis],
+      },
+    });
+  };
+
   return (
     <section className="panel result-panel" aria-labelledby="result-title">
       <div className="panel-title-row result-title-row">
@@ -273,78 +389,20 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
               <div key={shot.id} className="storyboard-edit-card">
                 <div className="storyboard-edit-heading">
                   <span>镜头{index + 1}</span>
-                  <label>
-                    <input
-                      type="number"
-                      min={0.3}
-                      max={10}
-                      step={0.1}
-                      value={shot.durationSec}
-                      onChange={(event) =>
-                        updateStoryboardShot(index, {
-                          durationSec: Number(event.target.value) || 0.3,
-                        })
-                      }
-                    />
-                    秒
-                  </label>
-                  <select
-                    value={shot.animation}
-                    onChange={(event) =>
-                      updateStoryboardShot(index, {
-                        animation: event.target.value as StoryboardShot["animation"],
-                      })
-                    }
+                  <small>
+                    {shot.durationSec}s ·{" "}
+                    {animationOptions.find((option) => option.value === shot.animation)
+                      ?.label ?? "动画"}
+                  </small>
+                  <button
+                    type="button"
+                    className="advanced-settings-button"
+                    onClick={() => setAdvancedShotIndex(index)}
                   >
-                    {animationOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    <Settings2 size={16} aria-hidden />
+                    高级设置
+                  </button>
                 </div>
-                {plan.advancedTemplate?.slots[index] ? (
-                  <div className="advanced-slot-row">
-                    <label>
-                      <span>高级镜头</span>
-                      <select
-                        value={plan.advancedTemplate.slots[index].sceneType}
-                        onChange={(event) =>
-                          updateAdvancedSlot(index, {
-                            sceneType: event.target.value as SceneType,
-                          })
-                        }
-                      >
-                        {advancedSceneTypes.map((sceneType) => (
-                          <option key={sceneType} value={sceneType}>
-                            {sceneTypeLabels[sceneType]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>入场方式</span>
-                      <select
-                        value={plan.advancedTemplate.slots[index].motion.entrance}
-                        onChange={(event) =>
-                          updateAdvancedSlot(index, {
-                            motion: {
-                              ...plan.advancedTemplate!.slots[index].motion,
-                              entrance: event.target
-                                .value as TemplateSlot["motion"]["entrance"],
-                            },
-                          })
-                        }
-                      >
-                        {advancedMotionEntrances.map((entrance) => (
-                          <option key={entrance} value={entrance}>
-                            {entranceLabels[entrance]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                ) : null}
                 <label className="storyboard-field">
                   <span>画面文字</span>
                   <input
@@ -372,6 +430,264 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
           </div>
         )}
       </div>
+
+      {activeShot && advancedShotIndex !== null ? (
+        <div
+          className="settings-backdrop"
+          role="presentation"
+          onClick={() => setAdvancedShotIndex(null)}
+        >
+          <section
+            className="settings-modal storyboard-settings-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`镜头${advancedShotIndex + 1}高级设置`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="settings-header">
+              <h3>镜头{advancedShotIndex + 1}高级设置</h3>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setAdvancedShotIndex(null)}
+              >
+                <X size={18} aria-hidden />
+              </button>
+            </header>
+
+            <div className="settings-content storyboard-settings-content">
+              <section className="settings-section no-top-border">
+                <h4>基础</h4>
+                <div className="two-field-row">
+                  <label className="settings-field">
+                    <span>时长 秒</span>
+                    <input
+                      type="number"
+                      min={0.3}
+                      max={10}
+                      step={0.1}
+                      value={activeShot.durationSec}
+                      onChange={(event) =>
+                        updateStoryboardShot(advancedShotIndex, {
+                          durationSec: Number(event.target.value) || 0.3,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="settings-field">
+                    <span>入场效果</span>
+                    <select
+                      value={activeShot.animation}
+                      onChange={(event) =>
+                        updateStoryboardShot(advancedShotIndex, {
+                          animation: event.target.value as StoryboardShot["animation"],
+                        })
+                      }
+                    >
+                      {animationOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <h4>文字</h4>
+                <div className="two-field-row">
+                  <label className="color-field">
+                    <span>文字色</span>
+                    <input
+                      type="color"
+                      value={activeShot.advancedSettings?.textColor ?? plan.style.colors.primary}
+                      onChange={(event) => {
+                        updateShotAdvancedSettings(advancedShotIndex, {
+                          textColor: event.target.value,
+                        });
+                        if (activeSlot) {
+                          updateAdvancedSlot(advancedShotIndex, {
+                            textColor: event.target.value,
+                          });
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="color-field">
+                    <span>强调色</span>
+                    <input
+                      type="color"
+                      value={activeShot.advancedSettings?.accentColor ?? plan.style.colors.accent}
+                      onChange={(event) =>
+                        updateShotBackground(advancedShotIndex, {
+                          accentColor: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <h4>背景</h4>
+                <div className="two-field-row">
+                  <label className="settings-field">
+                    <span>背景类型</span>
+                    <select
+                      value={activeShot.advancedSettings?.backgroundType ?? "inherit"}
+                      onChange={(event) =>
+                        updateShotBackground(advancedShotIndex, {
+                          backgroundType: event.target
+                            .value as NonNullable<
+                            StoryboardShot["advancedSettings"]
+                          >["backgroundType"],
+                        })
+                      }
+                    >
+                      {backgroundTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="color-field">
+                    <span>背景色</span>
+                    <input
+                      type="color"
+                      value={activeShot.advancedSettings?.backgroundColor ?? plan.style.colors.background}
+                      onChange={(event) =>
+                        updateShotBackground(advancedShotIndex, {
+                          backgroundColor: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+                {(activeShot.advancedSettings?.backgroundType ?? "inherit") === "image" ? (
+                  <label className="settings-field">
+                    <span>背景图片地址</span>
+                    <input
+                      value={activeShot.advancedSettings?.backgroundImageUrl ?? ""}
+                      placeholder="/generated-backgrounds/example.png 或 data:image/..."
+                      onChange={(event) =>
+                        updateShotBackground(advancedShotIndex, {
+                          backgroundImageUrl: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                ) : null}
+              </section>
+
+              <section className="settings-section">
+                <h4>特效</h4>
+                <div className="two-field-row">
+                  <label className="settings-field">
+                    <span>画面特效</span>
+                    <select
+                      value={activeShot.advancedSettings?.effect ?? "none"}
+                      onChange={(event) =>
+                        updateShotEffect(
+                          advancedShotIndex,
+                          event.target
+                            .value as NonNullable<
+                            StoryboardShot["advancedSettings"]
+                          >["effect"],
+                        )
+                      }
+                    >
+                      {effectOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="settings-field">
+                    <span>
+                      强度 {Math.round((activeShot.advancedSettings?.intensity ?? 0.55) * 100)}%
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={activeShot.advancedSettings?.intensity ?? 0.55}
+                      onChange={(event) =>
+                        updateShotAdvancedSettings(advancedShotIndex, {
+                          intensity: Number(event.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </section>
+
+              {activeSlot ? (
+                <section className="settings-section">
+                  <h4>高级模板</h4>
+                  <div className="two-field-row">
+                    <label className="settings-field">
+                      <span>高级镜头</span>
+                      <select
+                        value={activeSlot.sceneType}
+                        onChange={(event) =>
+                          updateAdvancedSlot(advancedShotIndex, {
+                            sceneType: event.target.value as SceneType,
+                          })
+                        }
+                      >
+                        {advancedSceneTypes.map((sceneType) => (
+                          <option key={sceneType} value={sceneType}>
+                            {sceneTypeLabels[sceneType]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="settings-field">
+                      <span>高级入场</span>
+                      <select
+                        value={activeSlot.motion.entrance}
+                        onChange={(event) =>
+                          updateAdvancedSlot(advancedShotIndex, {
+                            motion: {
+                              ...activeSlot.motion,
+                              entrance: event.target
+                                .value as TemplateSlot["motion"]["entrance"],
+                            },
+                          })
+                        }
+                      >
+                        {advancedMotionEntrances.map((entrance) => (
+                          <option key={entrance} value={entrance}>
+                            {entranceLabels[entrance]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="emphasis-grid">
+                    {advancedMotionEmphasis.map((emphasis) => (
+                      <label key={emphasis} className="emphasis-toggle">
+                        <input
+                          type="checkbox"
+                          checked={activeSlot.motion.emphasis.includes(emphasis)}
+                          onChange={() =>
+                            toggleAdvancedEmphasis(advancedShotIndex, emphasis)
+                          }
+                        />
+                        <span>{emphasisLabels[emphasis]}</span>
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 };

@@ -526,7 +526,7 @@ button:disabled {
 
 .storyboard-edit-heading {
   display: grid;
-  grid-template-columns: auto 96px 96px;
+  grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: center;
 }
@@ -544,13 +544,14 @@ button:disabled {
   font-weight: 800;
 }
 
-.storyboard-edit-heading label {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px;
-  align-items: center;
+.storyboard-edit-heading small {
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
   font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .storyboard-edit-heading input,
@@ -558,6 +559,27 @@ button:disabled {
   height: 32px;
   padding: 0 8px;
   font-size: 14px;
+}
+
+.advanced-settings-button {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #dceee5;
+  border-radius: 8px;
+  background: #f7fcf9;
+  color: var(--green-dark);
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.advanced-settings-button:hover {
+  border-color: var(--green);
+  box-shadow: 0 8px 18px rgba(58, 173, 123, 0.12);
 }
 
 .advanced-slot-row {
@@ -700,6 +722,19 @@ button:disabled {
 .settings-content h4 {
   margin: 0;
   font-size: 16px;
+}
+
+.storyboard-settings-modal {
+  width: min(780px, 100%);
+}
+
+.storyboard-settings-content {
+  gap: 0;
+}
+
+.no-top-border {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .palette-grid,
@@ -981,6 +1016,32 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
+}
+
+.emphasis-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.emphasis-toggle {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 0 12px;
+  color: #414957;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.emphasis-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--green);
 }
 
 .secondary-action {
@@ -1299,7 +1360,7 @@ button:disabled {
   }
 
   .storyboard-edit-heading {
-    grid-template-columns: 1fr 92px 92px;
+    grid-template-columns: 1fr;
   }
 
   .style-bar {

@@ -123,6 +123,7 @@ export const templateSlotSchema = z.object({
     .enum(["hook", "keyword", "point", "brand", "ending", "filler"])
     .default("point"),
   defaultText: z.string().min(1).max(60),
+  textColor: z.string().optional(),
   maxChars: z.number().min(1).max(80).optional(),
   visualDescription: z.string().max(160).optional(),
   layout: layoutSpecSchema.default({}),
@@ -160,6 +161,19 @@ export const storyboardShotSchema = z.object({
   text: z.string().min(1).max(36),
   visualDescription: z.string().min(1).max(120),
   animation: z.enum(["fade", "slide-up", "pop", "zoom", "typewriter"]),
+  advancedSettings: z
+    .object({
+      textColor: z.string().optional(),
+      accentColor: z.string().optional(),
+      backgroundType: z
+        .enum(["inherit", "solid", "gradient", "particles", "image"])
+        .optional(),
+      backgroundColor: z.string().optional(),
+      backgroundImageUrl: z.string().optional(),
+      effect: z.enum(["none", "flash", "jitter", "outline", "glow"]).optional(),
+      intensity: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
 });
 
 export const videoPlanSchema = z.object({
