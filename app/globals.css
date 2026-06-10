@@ -352,6 +352,10 @@ button:disabled {
   margin-top: 18px;
 }
 
+.prompt-generation-progress {
+  margin-top: 14px;
+}
+
 .prompt-examples {
   display: flex;
   flex-wrap: wrap;
