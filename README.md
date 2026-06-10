@@ -52,6 +52,7 @@
 - 结果可编辑：文案是完整编辑框，分镜支持逐镜头编辑。
 - 实时预览：右侧 Remotion Player 会响应文案、分镜、配色、字体、背景、音乐和比例变化。
 - 样式设置：支持预设配色、自定义配色、字体、字号整体缩放、字重、纯色背景、渐变、粒子和上传图片背景。
+- AI 背景图：背景窗口可调用千问文生图生成无文字背景，并保存到本地用于预览和导出。
 - 音乐设置：支持模板默认音乐、预设音乐、用户上传音乐、音量控制和网页静音。
 - 比例与分辨率：支持 4:3、16:9、9:16 等常见比例，也支持自定义比例和 720p、1080p、2K 导出分辨率。
 - 视频导出：通过 Remotion CLI 在本地渲染 MP4，并在页面展示渲染进度。
@@ -92,6 +93,8 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 QWEN_API_KEY=
 QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_VL_MODEL=qwen3-vl-plus
+QWEN_IMAGE_MODEL=qwen-image-2.0-pro
+QWEN_IMAGE_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
 ```
 
 启动开发服务器：
@@ -135,6 +138,7 @@ docs/screenshots/            # README 网页截图
 
 - 渲染后的视频会输出到 `public/renders/`。
 - demo 视频抽取出的模板音频会保存到 `public/music/template-audio/`。
+- 千问文生图生成的背景会保存到 `public/generated-backgrounds/`。
 - 上传分析过程中的临时文件会写入 `.uploads/`。
 
 这些目录用于本地运行和调试，不建议提交到 Git。
@@ -142,6 +146,7 @@ docs/screenshots/            # README 网页截图
 ## 注意事项
 
 - demo 视频解析依赖千问多模态模型，需要配置 `QWEN_API_KEY`。
+- AI 背景图依赖千问文生图模型，默认使用 `QWEN_IMAGE_MODEL=qwen-image-2.0-pro`。
 - DeepSeek key 缺失时，页面仍可以使用本地兜底文案，方便调 UI 和预览。
 - 当前 demo 视频上传大小默认限制为 20MB。
 - 1080p 和 2K 导出会启动浏览器逐帧渲染，耗时会明显高于页面预览。

@@ -1,6 +1,14 @@
 "use client";
 
-import { ChevronDown, Image, Music, Palette, SlidersHorizontal, X } from "lucide-react";
+import {
+  ChevronDown,
+  Image,
+  Music,
+  Palette,
+  SlidersHorizontal,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { StyleOptions } from "@/lib/schemas";
 import {
@@ -65,7 +73,9 @@ const summary = {
   },
   background: (style: StyleOptions) =>
     style.backgroundImageUrl
-      ? "上传图片"
+      ? style.backgroundImageUrl.startsWith("/generated-backgrounds/")
+        ? "AI生成图片"
+        : "上传图片"
       : backgroundOptions.find((bg) => bg.value === style.backgroundStyle)?.label ?? "背景",
   ratio: (style: StyleOptions) =>
     `${style.aspectRatio === "custom" ? `${style.customAspectWidth ?? 9}:${style.customAspectHeight ?? 16}` : style.aspectRatio} · ${style.resolution}`,
@@ -75,6 +85,11 @@ export const StyleBar: React.FC<StyleBarProps> = ({ value, onChange }) => {
   const [activePanel, setActivePanel] = useState<Panel>(null);
   const [customPalettes, setCustomPalettes] = useState<PalettePreset[]>([]);
   const [customName, setCustomName] = useState("我的配色");
+  const [backgroundPrompt, setBackgroundPrompt] = useState(
+    "黑色电影感空间，金色粒子光影，中央留白，适合叠加大字标题",
+  );
+  const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
+  const [backgroundError, setBackgroundError] = useState<string>();
 
   useEffect(() => {
     setCustomPalettes(readCustomPalettes());
@@ -150,6 +165,41 @@ export const StyleBar: React.FC<StyleBarProps> = ({ value, onChange }) => {
       musicUrl: music.url,
       musicVolume: music.volume,
     });
+  };
+
+  const generateBackground = async () => {
+    const prompt = backgroundPrompt.trim();
+    if (!prompt) return;
+
+    setIsGeneratingBackground(true);
+    setBackgroundError(undefined);
+    try {
+      const response = await fetch("/api/generate-background-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          style: value,
+        }),
+      });
+      const payload = (await response.json()) as {
+        imageUrl?: string;
+        error?: string;
+      };
+
+      if (!response.ok || payload.error || !payload.imageUrl) {
+        throw new Error(payload.error || "生成背景失败，请稍后重试。");
+      }
+
+      update({
+        backgroundStyle: "image",
+        backgroundImageUrl: payload.imageUrl,
+      });
+    } catch (caught) {
+      setBackgroundError(caught instanceof Error ? caught.message : "生成背景失败，请稍后重试。");
+    } finally {
+      setIsGeneratingBackground(false);
+    }
   };
 
   return (
@@ -373,6 +423,58 @@ export const StyleBar: React.FC<StyleBarProps> = ({ value, onChange }) => {
                     </button>
                   ))}
                 </div>
+                <section className="ai-background-panel">
+                  <div className="ai-background-heading">
+                    <span className="music-card-icon">
+                      <Sparkles size={18} aria-hidden />
+                    </span>
+                    <div>
+                      <strong>AI 生成背景图片</strong>
+                      <small>调用千问文生图，自动生成无文字背景并实时应用到预览。</small>
+                    </div>
+                  </div>
+                  <label className="settings-field">
+                    <span>背景描述</span>
+                    <textarea
+                      className="ai-background-textarea"
+                      value={backgroundPrompt}
+                      maxLength={800}
+                      placeholder="例如：黑金粒子光影、中央留白、电影感、适合励志金句"
+                      onChange={(event) => setBackgroundPrompt(event.target.value)}
+                    />
+                  </label>
+                  <div className="ai-background-actions">
+                    <button
+                      type="button"
+                      className="primary-inline-action"
+                      disabled={isGeneratingBackground || !backgroundPrompt.trim()}
+                      onClick={generateBackground}
+                    >
+                      <Sparkles size={18} aria-hidden />
+                      {isGeneratingBackground ? "正在生成..." : "生成背景"}
+                    </button>
+                    {value.backgroundImageUrl?.startsWith("/generated-backgrounds/") ? (
+                      <img
+                        className="generated-background-preview"
+                        src={value.backgroundImageUrl}
+                        alt="AI生成背景预览"
+                      />
+                    ) : null}
+                  </div>
+                  {isGeneratingBackground ? (
+                    <div className="analysis-progress compact-progress">
+                      <div className="analysis-progress-header">
+                        <span>千问正在生成背景</span>
+                        <span>约 10-30 秒</span>
+                      </div>
+                      <div className="analysis-progress-track">
+                        <span style={{ width: "72%" }} />
+                      </div>
+                      <p>生成后会保存到本地并自动作为右侧视频背景。</p>
+                    </div>
+                  ) : null}
+                  {backgroundError ? <p className="error-note inline-error">{backgroundError}</p> : null}
+                </section>
                 <label className="upload-dropzone">
                   <Image size={24} aria-hidden />
                   上传图片作为背景

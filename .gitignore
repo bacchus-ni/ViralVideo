@@ -5,6 +5,7 @@ dist
 public/renders/*.mp4
 public/renders/*.webm
 public/music/template-audio/
+public/generated-backgrounds/
 .uploads/
 .render-props
 tsconfig.tsbuildinfo
