@@ -4,12 +4,22 @@ import { fontMap, paceMultiplier } from "./theme";
 
 const ease = Easing.bezier(0.16, 1, 0.3, 1);
 
+const monotonicInputRange = (input: number[]) => {
+  let previous = Number.NEGATIVE_INFINITY;
+  return input.map((value) => {
+    const safeValue = Number.isFinite(value) ? value : 0;
+    const next = safeValue > previous ? safeValue : previous + 0.001;
+    previous = next;
+    return next;
+  });
+};
+
 const clamp = (
   frame: number,
   input: number[],
   output: number[],
 ) =>
-  interpolate(frame, input, output, {
+  interpolate(frame, monotonicInputRange(input), output, {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: ease,
@@ -34,8 +44,14 @@ export const TextScene: React.FC<{
   const palette = styleOptions.colors;
   const pace = paceMultiplier[styleOptions.pace];
   const baseFontSize = Math.min(width, height) * (styleOptions.fontSize / 1080);
-  const intro = Math.max(8, Math.round((0.36 * fps) / pace));
-  const outroStart = Math.max(intro + 1, durationInFrames - Math.round(0.28 * fps));
+  const intro = Math.min(
+    Math.max(2, durationInFrames - 0.002),
+    Math.max(8, Math.round((0.36 * fps) / pace)),
+  );
+  const outroStart = Math.max(
+    intro + 0.001,
+    Math.min(durationInFrames - 0.001, durationInFrames - Math.round(0.28 * fps)),
+  );
 
   const opacity =
     shot.animation === "typewriter"

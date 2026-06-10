@@ -11,6 +11,16 @@ export type KineticTextCompositionProps = {
 const mediaSrc = (value?: string) =>
   value?.startsWith("/") ? staticFile(value.slice(1)) : value;
 
+const monotonicInputRange = (input: number[]) => {
+  let previous = Number.NEGATIVE_INFINITY;
+  return input.map((value) => {
+    const safeValue = Number.isFinite(value) ? value : 0;
+    const next = safeValue > previous ? safeValue : previous + 0.001;
+    previous = next;
+    return next;
+  });
+};
+
 const mergeAdvancedStyle = (
   baseStyle: StyleOptions,
   advancedTemplate?: AdvancedTemplateSpec,
@@ -82,7 +92,12 @@ export const KineticTextComposition: React.FC<KineticTextCompositionProps> = ({
           volume={(frame) =>
             interpolate(
               frame,
-              [0, 8, getAdvancedDurationInFrames(plan) - 18, getAdvancedDurationInFrames(plan)],
+              monotonicInputRange([
+                0,
+                8,
+                getAdvancedDurationInFrames(plan) - 18,
+                getAdvancedDurationInFrames(plan),
+              ]),
               [0, style.musicVolume, style.musicVolume, 0],
               { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
             )
