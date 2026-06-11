@@ -24,6 +24,7 @@ export const createRenderJob = async (plan: VideoPlan): Promise<RenderResult> =>
   const outputLocation = path.join(outputDir, outputFilename);
   const propsLocation = path.join(propsDir, `${id}.json`);
   const remotionBin = path.join(process.cwd(), "node_modules", ".bin", "remotion");
+  const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE;
 
   await mkdir(outputDir, { recursive: true });
   await mkdir(propsDir, { recursive: true });
@@ -42,6 +43,7 @@ export const createRenderJob = async (plan: VideoPlan): Promise<RenderResult> =>
         `--height=${dimensions.height}`,
         "--concurrency=1",
         "--overwrite",
+        ...(browserExecutable ? [`--browser-executable=${browserExecutable}`] : []),
       ],
       {
         cwd: process.cwd(),
