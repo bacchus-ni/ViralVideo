@@ -24,7 +24,7 @@ export const animationOptions: Array<{
   { label: "打字", value: "typewriter" },
 ];
 
-const sceneTypeLabels: Record<SceneType, string> = {
+export const sceneTypeLabels: Record<SceneType, string> = {
   "intro-wipe": "色块擦入",
   "word-card": "文字卡片",
   "split-word": "裁切分裂",
@@ -53,6 +53,7 @@ const emphasisLabels: Record<TemplateSlot["motion"]["emphasis"][number], string>
   "clip-split": "裁切",
   outline: "描边",
   "repeat-rows": "阵列",
+  glow: "发光",
 };
 
 const effectOptions: Array<{
@@ -106,23 +107,26 @@ export const MotionSettingsPanel: React.FC<MotionSettingsPanelProps> = ({
             }
           />
         </label>
-        <label className="settings-field">
-          <span>入场效果</span>
-          <select
-            value={shot.animation}
-            onChange={(event) =>
-              onShotChange({
-                animation: event.target.value as StoryboardShot["animation"],
-              })
-            }
-          >
-            {animationOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* 高级模板的入场由下方槽位入场控制，普通入场动画不参与渲染，隐藏避免误导 */}
+        {slot ? null : (
+          <label className="settings-field">
+            <span>入场效果</span>
+            <select
+              value={shot.animation}
+              onChange={(event) =>
+                onShotChange({
+                  animation: event.target.value as StoryboardShot["animation"],
+                })
+              }
+            >
+              {animationOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
     </section>
 
@@ -160,7 +164,7 @@ export const MotionSettingsPanel: React.FC<MotionSettingsPanelProps> = ({
         <h4>高级模板</h4>
         <div className="two-field-row">
           <label className="settings-field">
-            <span>高级镜头</span>
+            <span>镜头类型</span>
             <select
               value={slot.sceneType}
               onChange={(event) =>
@@ -175,7 +179,7 @@ export const MotionSettingsPanel: React.FC<MotionSettingsPanelProps> = ({
             </select>
           </label>
           <label className="settings-field">
-            <span>高级入场</span>
+            <span>入场效果</span>
             <select
               value={slot.motion.entrance}
               onChange={(event) =>

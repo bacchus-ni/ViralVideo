@@ -116,6 +116,17 @@ export const StudioApp: React.FC = () => {
     [plan, selectedTemplateId, style],
   );
 
+  const selectedTemplate = useMemo(
+    () =>
+      allTemplates.find((candidate) => candidate.id === selectedTemplateId) ??
+      getTemplateById(selectedTemplateId),
+    [allTemplates, selectedTemplateId],
+  );
+  const defaultMusicUrl =
+    plan.advancedTemplate?.audio?.url ?? selectedTemplate.defaultStyle.musicUrl;
+  const defaultMusicVolume =
+    plan.advancedTemplate?.audio?.volume ?? selectedTemplate.defaultStyle.musicVolume;
+
   const selectTemplate = (id: string) => {
     const template =
       allTemplates.find((candidate) => candidate.id === id) ?? getTemplateById(id);
@@ -318,7 +329,12 @@ export const StudioApp: React.FC = () => {
           onChange={setPlan}
         />
 
-        <StyleBar value={style} onChange={updateStyle} />
+        <StyleBar
+          value={style}
+          onChange={updateStyle}
+          defaultMusicUrl={defaultMusicUrl}
+          defaultMusicVolume={defaultMusicVolume}
+        />
         {error ? <p className="error-note">{error}</p> : null}
       </div>
 

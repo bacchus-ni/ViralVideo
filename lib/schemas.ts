@@ -29,6 +29,7 @@ export const advancedMotionEmphasis = [
   "clip-split",
   "outline",
   "repeat-rows",
+  "glow",
 ] as const;
 
 export const colorSetSchema = z.object({

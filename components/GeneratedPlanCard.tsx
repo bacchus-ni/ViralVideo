@@ -12,6 +12,7 @@ import { BackgroundSettingsPanel } from "./settings/BackgroundSettingsPanel";
 import {
   MotionSettingsPanel,
   animationOptions,
+  sceneTypeLabels,
 } from "./settings/MotionSettingsPanel";
 import { SettingsModal } from "./settings/SettingsModal";
 import { TypographySettingsPanel } from "./settings/TypographySettingsPanel";
@@ -29,8 +30,16 @@ const effectToEmphasis = (
   if (effect === "flash") return "flash";
   if (effect === "jitter") return "jitter";
   if (effect === "outline") return "outline";
+  if (effect === "glow") return "glow";
   return undefined;
 };
+
+const effectEmphasisValues: TemplateSlot["motion"]["emphasis"] = [
+  "flash",
+  "jitter",
+  "outline",
+  "glow",
+];
 
 const recalculateTiming = (plan: VideoPlan): VideoPlan => {
   let cursor = 0;
@@ -141,68 +150,70 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
     );
   };
 
-  const updateStoryboardShot = (
+  // 分镜与高级槽位必须在同一次 onChange 中更新，否则后一次会用旧 plan 覆盖前一次
+  const updateShotAndSlot = (
     index: number,
-    patch: Partial<StoryboardShot>,
+    shotPatch: Partial<StoryboardShot>,
+    slotPatch?: Partial<TemplateSlot>,
   ) => {
     const storyboard = plan.storyboard.map((shot, shotIndex) =>
-      shotIndex === index ? { ...shot, ...patch } : shot,
+      shotIndex === index ? { ...shot, ...shotPatch } : shot,
     );
     const script =
-      typeof patch.text === "string"
+      typeof shotPatch.text === "string"
         ? plan.script.map((line, lineIndex) =>
-            lineIndex === index ? { ...line, text: patch.text ?? line.text } : line,
+            lineIndex === index
+              ? { ...line, text: shotPatch.text ?? line.text }
+              : line,
           )
         : plan.script;
+    const advancedTemplate =
+      plan.advancedTemplate && slotPatch
+        ? {
+            ...plan.advancedTemplate,
+            slots: plan.advancedTemplate.slots.map((slot, slotIndex) =>
+              slotIndex === index
+                ? {
+                    ...slot,
+                    ...slotPatch,
+                    layout: {
+                      ...slot.layout,
+                      ...(slotPatch.layout ?? {}),
+                    },
+                    motion: {
+                      ...slot.motion,
+                      ...(slotPatch.motion ?? {}),
+                    },
+                    background: {
+                      ...slot.background,
+                      ...(slotPatch.background ?? {}),
+                    },
+                  }
+                : slot,
+            ),
+          }
+        : plan.advancedTemplate;
 
     onChange(
       recalculateTiming({
         ...plan,
         script,
         storyboard,
+        advancedTemplate,
       }),
     );
   };
 
+  const updateStoryboardShot = (
+    index: number,
+    patch: Partial<StoryboardShot>,
+  ) => {
+    updateShotAndSlot(index, patch);
+  };
+
   const updateAdvancedSlot = (index: number, patch: Partial<TemplateSlot>) => {
     if (!plan.advancedTemplate) return;
-    const slots = reflowTemplateSlots(
-      plan.advancedTemplate.slots.map((slot, slotIndex) =>
-        slotIndex === index
-          ? {
-              ...slot,
-              ...patch,
-              layout: {
-                ...slot.layout,
-                ...(patch.layout ?? {}),
-              },
-              motion: {
-                ...slot.motion,
-                ...(patch.motion ?? {}),
-              },
-              background: {
-                ...slot.background,
-                ...(patch.background ?? {}),
-              },
-            }
-          : slot,
-      ),
-    );
-
-    onChange({
-      ...plan,
-      durationSec: Math.max(
-        10,
-        Math.min(45, getTemplateDuration(slots, plan.advancedTemplate.durationSec)),
-      ),
-      advancedTemplate: {
-        ...plan.advancedTemplate,
-        slots,
-        durationSec: getTemplateDuration(slots, plan.advancedTemplate.durationSec),
-        beatMarkers: slots.map((slot) => slot.startSec),
-        flashCuts: slots.slice(1).map((slot) => slot.startSec),
-      },
-    });
+    updateShotAndSlot(index, {}, patch);
   };
 
   const updateShotAdvancedSettings = (
@@ -210,68 +221,95 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
     patch: Partial<NonNullable<StoryboardShot["advancedSettings"]>>,
   ) => {
     const current = plan.storyboard[index]?.advancedSettings ?? {};
-    updateStoryboardShot(index, {
-      advancedSettings: {
-        ...current,
-        ...patch,
-      },
-    });
+    const slot = plan.advancedTemplate?.slots[index];
+    let slotPatch: Partial<TemplateSlot> | undefined;
+    if (slot) {
+      slotPatch = {};
+      if (patch.intensity !== undefined) {
+        slotPatch.motion = { ...slot.motion, intensity: patch.intensity };
+      }
+      if ("textColor" in patch) {
+        slotPatch.textColor = patch.textColor;
+      }
+      if (Object.keys(slotPatch).length === 0) {
+        slotPatch = undefined;
+      }
+    }
+    updateShotAndSlot(
+      index,
+      { advancedSettings: { ...current, ...patch } },
+      slotPatch,
+    );
   };
 
   const updateShotEffect = (
     index: number,
     effect: NonNullable<StoryboardShot["advancedSettings"]>["effect"],
   ) => {
-    updateShotAdvancedSettings(index, { effect });
-    if (!plan.advancedTemplate?.slots[index]) return;
-    const mapped = effectToEmphasis(effect);
-    const current = plan.advancedTemplate.slots[index].motion.emphasis;
-    const preserved = current.filter(
-      (item) => !["flash", "jitter", "outline"].includes(item),
+    const current = plan.storyboard[index]?.advancedSettings ?? {};
+    const slot = plan.advancedTemplate?.slots[index];
+    let slotPatch: Partial<TemplateSlot> | undefined;
+    if (slot) {
+      const mapped = effectToEmphasis(effect);
+      const preserved = slot.motion.emphasis.filter(
+        (item) => !effectEmphasisValues.includes(item),
+      );
+      slotPatch = {
+        motion: {
+          ...slot.motion,
+          emphasis: mapped ? [...preserved, mapped] : preserved,
+        },
+      };
+    }
+    updateShotAndSlot(
+      index,
+      { advancedSettings: { ...current, effect } },
+      slotPatch,
     );
-    updateAdvancedSlot(index, {
-      motion: {
-        ...plan.advancedTemplate.slots[index].motion,
-        emphasis: mapped ? [...preserved, mapped] : preserved,
-      },
-    });
   };
 
   const updateShotBackground = (
     index: number,
     patch: Partial<NonNullable<StoryboardShot["advancedSettings"]>>,
   ) => {
-    updateShotAdvancedSettings(index, patch);
+    const current = plan.storyboard[index]?.advancedSettings ?? {};
     const slot = plan.advancedTemplate?.slots[index];
-    if (!slot) return;
-    const backgroundPatch: Partial<TemplateSlot["background"]> = {};
-    if (patch.backgroundType !== undefined) {
-      backgroundPatch.type =
-        patch.backgroundType === "inherit" ? "transparent" : patch.backgroundType;
+    let slotPatch: Partial<TemplateSlot> | undefined;
+    if (slot) {
+      const backgroundPatch: Partial<TemplateSlot["background"]> = {};
+      if (patch.backgroundType !== undefined) {
+        backgroundPatch.type =
+          patch.backgroundType === "inherit" ? "transparent" : patch.backgroundType;
+      }
+      if ("backgroundColor" in patch) {
+        backgroundPatch.color = patch.backgroundColor;
+      }
+      if ("accentColor" in patch) {
+        backgroundPatch.accentColor = patch.accentColor;
+      }
+      if ("backgroundImageUrl" in patch) {
+        backgroundPatch.imageUrl = patch.backgroundImageUrl;
+      }
+      slotPatch = {
+        background: {
+          ...slot.background,
+          ...backgroundPatch,
+        },
+      };
     }
-    if ("backgroundColor" in patch) {
-      backgroundPatch.color = patch.backgroundColor;
-    }
-    if ("accentColor" in patch) {
-      backgroundPatch.accentColor = patch.accentColor;
-    }
-    if ("backgroundImageUrl" in patch) {
-      backgroundPatch.imageUrl = patch.backgroundImageUrl;
-    }
-    updateAdvancedSlot(index, {
-      background: {
-        ...slot.background,
-        ...backgroundPatch,
-      },
-    });
+    updateShotAndSlot(
+      index,
+      { advancedSettings: { ...current, ...patch } },
+      slotPatch,
+    );
   };
 
   const toggleAdvancedEmphasis = (
     index: number,
     emphasis: TemplateSlot["motion"]["emphasis"][number],
   ) => {
-    if (!plan.advancedTemplate?.slots[index]) return;
-    const slot = plan.advancedTemplate.slots[index];
+    const slot = plan.advancedTemplate?.slots[index];
+    if (!slot) return;
     const hasEmphasis = slot.motion.emphasis.includes(emphasis);
     updateAdvancedSlot(index, {
       motion: {
@@ -340,8 +378,11 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
                   <span>镜头{index + 1}</span>
                   <small>
                     {shot.durationSec}s ·{" "}
-                    {animationOptions.find((option) => option.value === shot.animation)
-                      ?.label ?? "动画"}
+                    {plan.advancedTemplate?.slots[index]
+                      ? sceneTypeLabels[plan.advancedTemplate.slots[index].sceneType]
+                      : animationOptions.find(
+                          (option) => option.value === shot.animation,
+                        )?.label ?? "动画"}
                   </small>
                   <button
                     type="button"
@@ -397,12 +438,9 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
               accentColor={activeShot.advancedSettings?.accentColor}
               fallbackTextColor={plan.style.colors.primary}
               fallbackAccentColor={plan.style.colors.accent}
-              onTextColorChange={(textColor) => {
-                updateShotAdvancedSettings(advancedShotIndex, { textColor });
-                if (activeSlot) {
-                  updateAdvancedSlot(advancedShotIndex, { textColor });
-                }
-              }}
+              onTextColorChange={(textColor) =>
+                updateShotAdvancedSettings(advancedShotIndex, { textColor })
+              }
               onAccentColorChange={(accentColor) =>
                 updateShotBackground(advancedShotIndex, { accentColor })
               }

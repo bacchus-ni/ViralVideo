@@ -26,6 +26,8 @@ import { mergeStylePatch } from "./settings/settings-utils";
 type StyleBarProps = {
   value: StyleOptions;
   onChange: (value: StyleOptions) => void;
+  defaultMusicUrl?: string;
+  defaultMusicVolume?: number;
 };
 
 type Panel = "appearance" | "music" | "background" | "ratio" | null;
@@ -61,7 +63,12 @@ const panelTitle = (panel: Exclude<Panel, null>) => {
   return "比例与分辨率";
 };
 
-export const StyleBar: React.FC<StyleBarProps> = ({ value, onChange }) => {
+export const StyleBar: React.FC<StyleBarProps> = ({
+  value,
+  onChange,
+  defaultMusicUrl,
+  defaultMusicVolume,
+}) => {
   const [activePanel, setActivePanel] = useState<Panel>(null);
 
   const update = (patch: Partial<StyleOptions>) => {
@@ -126,7 +133,12 @@ export const StyleBar: React.FC<StyleBarProps> = ({ value, onChange }) => {
           ) : null}
 
           {activePanel === "music" ? (
-            <MusicSettingsPanel value={value} onChange={update} />
+            <MusicSettingsPanel
+              value={value}
+              onChange={update}
+              defaultMusicUrl={defaultMusicUrl}
+              defaultMusicVolume={defaultMusicVolume}
+            />
           ) : null}
 
           {activePanel === "background" ? (

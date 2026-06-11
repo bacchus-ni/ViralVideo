@@ -642,8 +642,12 @@ export const KineticTextScene: React.FC<{
   const frame = useCurrentFrame();
   const flash =
     slot.motion.emphasis.includes("flash") && frame < 3
-      ? clamp(frame, [0, 2], [0.12, 0])
+      ? clamp(frame, [0, 2], [0.05 + slot.motion.intensity * 0.16, 0])
       : 0;
+  const glowColor = slot.background.accentColor ?? styleOptions.colors.accent;
+  const glowFilter = slot.motion.emphasis.includes("glow")
+    ? `drop-shadow(0 0 ${Math.round(10 + slot.motion.intensity * 26)}px ${glowColor})`
+    : undefined;
 
   const sceneProps = {
     slot,
@@ -656,15 +660,16 @@ export const KineticTextScene: React.FC<{
   return (
     <AbsoluteFill style={{ overflow: "hidden", backgroundColor: styleOptions.colors.background }}>
       <SlotBackground slot={slot} styleOptions={styleOptions} />
-      {slot.sceneType === "intro-wipe" ? <IntroWipeScene {...sceneProps} /> : null}
-      {slot.sceneType === "word-card" ? <WordCardScene {...sceneProps} /> : null}
-      {slot.sceneType === "split-word" ? <SplitWordScene {...sceneProps} /> : null}
-      {slot.sceneType === "stomp-word" ? <StompWordScene {...sceneProps} /> : null}
-      {slot.sceneType === "letter-scatter" ? <LetterScatterScene {...sceneProps} /> : null}
-      {slot.sceneType === "outline-rows" ? <OutlineRowsScene {...sceneProps} /> : null}
-      {slot.sceneType === "logo-hold" ? <LogoHoldScene {...sceneProps} /> : null}
-      {slot.sceneType === "stacked-title" ? <StackedTitleScene {...sceneProps} /> : null}
-      {slot.sceneType === "blank-color" ? null : null}
+      <AbsoluteFill style={{ filter: glowFilter }}>
+        {slot.sceneType === "intro-wipe" ? <IntroWipeScene {...sceneProps} /> : null}
+        {slot.sceneType === "word-card" ? <WordCardScene {...sceneProps} /> : null}
+        {slot.sceneType === "split-word" ? <SplitWordScene {...sceneProps} /> : null}
+        {slot.sceneType === "stomp-word" ? <StompWordScene {...sceneProps} /> : null}
+        {slot.sceneType === "letter-scatter" ? <LetterScatterScene {...sceneProps} /> : null}
+        {slot.sceneType === "outline-rows" ? <OutlineRowsScene {...sceneProps} /> : null}
+        {slot.sceneType === "logo-hold" ? <LogoHoldScene {...sceneProps} /> : null}
+        {slot.sceneType === "stacked-title" ? <StackedTitleScene {...sceneProps} /> : null}
+      </AbsoluteFill>
       {flash > 0 ? (
         <AbsoluteFill style={{ backgroundColor: styleOptions.colors.primary, opacity: flash }} />
       ) : null}

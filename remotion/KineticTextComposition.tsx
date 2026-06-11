@@ -81,7 +81,8 @@ export const KineticTextComposition: React.FC<KineticTextCompositionProps> = ({
 }) => {
   const template = plan.advancedTemplate;
   const style = mergeAdvancedStyle(plan.style, template);
-  const musicSrc = mediaSrc(template?.audio?.url ?? style.musicUrl);
+  // 合并后的 musicUrl 已带模板音频兜底；空字符串表示用户主动移除音乐
+  const musicSrc = mediaSrc(style.musicUrl);
   const slots = template?.slots ?? [];
 
   return (

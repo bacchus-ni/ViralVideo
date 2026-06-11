@@ -1,6 +1,6 @@
 "use client";
 
-import { Music } from "lucide-react";
+import { Music, RotateCcw } from "lucide-react";
 import type { StyleOptions } from "@/lib/schemas";
 import { musicOptions } from "@/lib/style-presets";
 import { RangeField, UploadDropzone } from "./SettingControls";
@@ -9,6 +9,8 @@ import { readFileAsDataUrl } from "./settings-utils";
 type MusicSettingsPanelProps = {
   value: StyleOptions;
   onChange: (patch: Partial<StyleOptions>) => void;
+  defaultMusicUrl?: string;
+  defaultMusicVolume?: number;
   showTitle?: boolean;
   compactUpload?: boolean;
 };
@@ -16,6 +18,8 @@ type MusicSettingsPanelProps = {
 export const MusicSettingsPanel: React.FC<MusicSettingsPanelProps> = ({
   value,
   onChange,
+  defaultMusicUrl,
+  defaultMusicVolume,
   showTitle = false,
   compactUpload = false,
 }) => {
@@ -66,11 +70,26 @@ export const MusicSettingsPanel: React.FC<MusicSettingsPanelProps> = ({
         value={value.musicVolume}
         onChange={(musicVolume) => onChange({ musicVolume })}
       />
+      {defaultMusicUrl && value.musicUrl !== defaultMusicUrl ? (
+        <button
+          type="button"
+          className="secondary-action"
+          onClick={() =>
+            onChange({
+              musicUrl: defaultMusicUrl,
+              musicVolume: defaultMusicVolume ?? value.musicVolume,
+            })
+          }
+        >
+          <RotateCcw size={16} aria-hidden />
+          恢复默认背景音乐
+        </button>
+      ) : null}
       {value.musicUrl ? (
         <button
           type="button"
           className="secondary-action"
-          onClick={() => onChange({ musicUrl: undefined })}
+          onClick={() => onChange({ musicUrl: "" })}
         >
           移除背景音乐
         </button>

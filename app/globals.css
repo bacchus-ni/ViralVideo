@@ -1095,6 +1095,7 @@ button:disabled {
   min-height: 38px;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 0 14px;
   color: var(--green-dark);
   font-weight: 800;
