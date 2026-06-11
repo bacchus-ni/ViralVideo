@@ -929,9 +929,16 @@ const WordSwapScene: React.FC<SceneProps> = ({
   // 第一个换词不在句子里时，把换词追加在句尾，保证场景始终可用
   const prefix = anchorIndex >= 0 ? text.slice(0, anchorIndex) : `${text} `;
   const suffix = anchorIndex >= 0 ? text.slice(anchorIndex + anchorWord.length) : "";
+  // 节拍多于词数时按跨步取拍，让换词均匀铺满整个槽位
   const switches =
     beatFrames.length >= 2
-      ? beatFrames
+      ? (() => {
+          const stride = Math.max(1, Math.floor(beatFrames.length / words.length));
+          return words.map(
+            (_, index) =>
+              beatFrames[Math.min(index * stride, beatFrames.length - 1)],
+          );
+        })()
       : Array.from({ length: words.length }, (_, index) =>
           Math.round((index * durationFrames) / Math.max(1, words.length)),
         );
@@ -989,9 +996,13 @@ const BurstWordsScene: React.FC<SceneProps> = ({
   const frame = useCurrentFrame();
   const accent = slot.background.accentColor ?? styleOptions.colors.accent;
   const words = slot.burstWords?.length ? slot.burstWords : [text, text, text, text];
+  const burstStride =
+    beatFrames.length >= 2
+      ? Math.max(1, Math.floor(beatFrames.length / words.length))
+      : 1;
   const appearAt = words.map(
     (_, index) =>
-      beatFrames[index] ??
+      beatFrames[Math.min(index * burstStride, beatFrames.length - 1)] ??
       Math.round(((index + 0.5) * durationFrames) / (words.length + 1)),
   );
 
@@ -1194,7 +1205,10 @@ export const KineticTextScene: React.FC<{
               ...fontMap[styleOptions.fontFamily],
               fontWeight: styleOptions.fontWeight,
               fontSize: baseFontSize * (slot.backdrop.scale ?? 3.2),
-              color: styleOptions.colors.primary,
+              // 浅色底上用深色幽灵字，避免白字白底不可见
+              color: isLightColor(resolveBackground(slot, styleOptions))
+                ? styleOptions.colors.muted
+                : styleOptions.colors.primary,
               opacity: slot.backdrop.opacity ?? 0.12,
               lineHeight: 1,
               whiteSpace: "nowrap",

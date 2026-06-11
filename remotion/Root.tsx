@@ -2,6 +2,7 @@ import { Composition } from "remotion";
 import { getRenderDimensions } from "../lib/schemas";
 import { defaultPlan } from "../lib/templates";
 import { sampleMixcut1Plan } from "./fixtures/sample-mixcut-1";
+import { showcaseDemoPlan } from "./fixtures/showcase-demo";
 import {
   getDurationInFrames,
   TextMixComposition,
@@ -38,6 +39,16 @@ export const RemotionRoot: React.FC = () => {
         width={1280}
         height={720}
         defaultProps={{ plan: sampleMixcut1Plan }}
+      />
+      {/* 全能力自我演示片：每个镜头展示一种系统能力，真实鼓点驱动 */}
+      <Composition
+        id="ShowcaseDemo"
+        component={TextMixComposition}
+        durationInFrames={getDurationInFrames(showcaseDemoPlan)}
+        fps={VIDEO_FPS}
+        width={1280}
+        height={720}
+        defaultProps={{ plan: showcaseDemoPlan }}
       />
     </>
   );
