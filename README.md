@@ -83,7 +83,7 @@
 - 从 demo 视频抽取出的音频文件，并自动作为该模板默认背景音乐。
 
 
-<video controls src="docs/videos/02-template-analysis.mp4"></video>
+[查看模板视频解析演示](docs/videos/02-template-analysis.mp4)
 
 ## 3. 描述需求并生成文案
 
@@ -103,7 +103,7 @@
 
 DeepSeek 返回后，本地会通过 Zod schema 做结构化校验和归一化。
 
-<video controls src="docs/videos/03-generate-scripts-and-storyboards.mp4"></video>
+[查看文案与分镜生成演示](docs/videos/03-generate-scripts-and-storyboards.mp4)
 
 ## 4. 编辑完整文案
 
@@ -161,7 +161,7 @@ AI 生成结果里的「文案」是一个完整的大编辑框，而不是拆�
 
 分镜高级设置演示视频占位：
 
-<video controls src="docs/videos/03-shot-customization.mp4"></video>
+[查看分镜高级设置演示](docs/videos/03-shot-customization.mp4)
 
 ## 7. 配色与字体
 
@@ -217,7 +217,7 @@ AI 背景图会调用后端 `/api/generate-background-image`，生成成功后�
 右侧预览区还有一个「网页静音 / 预览有声」按钮。这个按钮只影响浏览器里的预览播放，不会改变导出视频中的声音。
 
 
-<video controls src="docs/videos/09-music-settings.mp4"></video>
+[查看音乐设置演示](docs/videos/09-music-settings.mp4)
 
 ## 10. 比例、分辨率与实时预览
 
@@ -255,7 +255,7 @@ AI 背景图会调用后端 `/api/generate-background-image`，生成成功后�
 渲染完成后会出现下载入口。导出视频会写入 `public/renders/`，页面返回可下载链接。
 
 
-<video controls src="docs/videos/04-render-export.mp4"></video>
+[查看视频生成与导出演示](docs/videos/04-render-export.mp4)
 
 ## 已实现能力清单
 
