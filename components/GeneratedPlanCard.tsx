@@ -41,6 +41,27 @@ const effectEmphasisValues: TemplateSlot["motion"]["emphasis"] = [
   "glow",
 ];
 
+// 文案编辑框里的【强调词】行内标记：解析出 emphasis 数组并去掉括号
+const parseEmphasisMarkup = (line: string) => {
+  const emphasis: string[] = [];
+  const text = line.replace(/【([^【】]{1,12})】/g, (_, word: string) => {
+    emphasis.push(word);
+    return word;
+  });
+  return { text, emphasis: emphasis.slice(0, 4) };
+};
+
+// 把已有 emphasis 还原成【】标记，让编辑框可以看到并修改强调词
+const formatLineWithEmphasis = (line: { text: string; emphasis?: string[] }) => {
+  let result = line.text;
+  for (const word of line.emphasis ?? []) {
+    if (!word || !result.includes(word)) continue;
+    if (result.includes(`【${word}】`)) continue;
+    result = result.replace(word, `【${word}】`);
+  }
+  return result;
+};
+
 const recalculateTiming = (plan: VideoPlan): VideoPlan => {
   let cursor = 0;
   const storyboard = plan.storyboard.map((shot, index) => {
@@ -74,7 +95,12 @@ const recalculateTiming = (plan: VideoPlan): VideoPlan => {
             advancedSlots,
             plan.advancedTemplate.durationSec,
           ),
-          beatMarkers: advancedSlots.map((slot) => slot.startSec),
+          // 本地检测出的鼓点是音频事实，编辑分镜时长时不要用槽位起点覆盖
+          beatMarkers:
+            plan.advancedTemplate.beatSource === "detected" &&
+            plan.advancedTemplate.beatMarkers.length
+              ? plan.advancedTemplate.beatMarkers
+              : advancedSlots.map((slot) => slot.startSec),
           flashCuts: advancedSlots.slice(1).map((slot) => slot.startSec),
         }
       : undefined;
@@ -101,7 +127,7 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
   const [activeTab, setActiveTab] = useState<"script" | "storyboard">("script");
   const [advancedShotIndex, setAdvancedShotIndex] = useState<number | null>(null);
   const scriptText = useMemo(
-    () => plan.script.map((line) => line.text).join("\n"),
+    () => plan.script.map(formatLineWithEmphasis).join("\n"),
     [plan.script],
   );
   const activeShot =
@@ -116,23 +142,29 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
   };
 
   const updateScriptText = (text: string) => {
+    // 编辑框始终带【】标记，解析结果就是强调词的唯一事实：
+    // 删掉括号即取消强调
     const lines = text
       .split(/\n+/)
       .map((line) => line.trim())
       .filter(Boolean)
-      .slice(0, 24);
-    const nextLines = lines.length > 0 ? lines : [""];
-    const script = nextLines.map((line, index) => ({
-      id: plan.script[index]?.id ?? `line-${index + 1}`,
-      text: line.slice(0, 36),
-      emphasis: plan.script[index]?.emphasis ?? [],
-    }));
+      .slice(0, 24)
+      .map(parseEmphasisMarkup);
+    const nextLines = lines.length > 0 ? lines : [{ text: "", emphasis: [] }];
+    const script = nextLines.map((line, index) => {
+      const lineText = line.text.slice(0, 36);
+      return {
+        id: plan.script[index]?.id ?? `line-${index + 1}`,
+        text: lineText,
+        emphasis: line.emphasis.filter((word) => lineText.includes(word)),
+      };
+    });
     const storyboard = nextLines.map((line, index) => {
       const existing = plan.storyboard[index] ?? plan.storyboard[plan.storyboard.length - 1];
       return {
         ...existing,
         id: existing?.id ?? `shot-${index + 1}`,
-        text: line.slice(0, 36),
+        text: line.text.slice(0, 36),
         visualDescription:
           existing?.visualDescription ?? "文字居中出现，保持清晰节奏",
         animation: existing?.animation ?? "pop",
@@ -363,7 +395,7 @@ export const GeneratedPlanCard: React.FC<GeneratedPlanCardProps> = ({
 
         {activeTab === "script" ? (
           <label className="script-textarea-wrap">
-            <span>每行会成为一个视频镜头文字</span>
+            <span>每行会成为一个视频镜头文字，用【】括住强调词可变色</span>
             <textarea
               value={scriptText}
               onChange={(event) => updateScriptText(event.target.value)}

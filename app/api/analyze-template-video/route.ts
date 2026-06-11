@@ -5,9 +5,12 @@ import path from "path";
 import { promisify } from "util";
 import { styleOptionsSchema } from "@/lib/schemas";
 import {
+  getTemplateDuration,
   normalizeAdvancedTemplate,
+  snapSlotsToBeats,
   summarizeAdvancedTemplate,
 } from "@/lib/advanced-template";
+import { detectBeatsFromMedia } from "@/lib/beat-detect";
 import { getPalettePreset } from "@/lib/style-presets";
 import { defaultPlan } from "@/lib/templates";
 
@@ -94,6 +97,7 @@ const extractAudioFromDemoVideo = async (
 
     return {
       url: `/music/template-audio/${outputFilename}`,
+      filePath: outputPath,
       volume: 0.22,
     };
   } catch {
@@ -142,11 +146,17 @@ const systemPrompt = `你是一个短视频模板拆解师。
         "id": "slot-1",
         "startSec": 0,
         "durationSec": 0.5,
-        "sceneType": "intro-wipe|word-card|split-word|stomp-word|letter-scatter|outline-rows|logo-hold|blank-color|stacked-title",
+        "sceneType": "intro-wipe|word-card|split-word|stomp-word|letter-scatter|outline-rows|logo-hold|blank-color|stacked-title|title-sub|word-swap|burst-words|char-annotation",
         "textRole": "hook|keyword|point|brand|ending|filler",
         "defaultText": "该镜头默认文字",
         "maxChars": 8,
         "visualDescription": "画面、文字入场、转场说明",
+        "emphasisWords": ["text 里需要变色或高亮的原文子串"],
+        "emphasisStyle": "color|highlight|outline",
+        "subText": "title-sub 的小副标题或 char-annotation 的竖排小字，可选",
+        "swapWords": ["word-swap 场景逐拍替换的词组，第一个词必须出现在 defaultText 里"],
+        "burstWords": ["burst-words 场景逐拍弹出的拟声词"],
+        "backdrop": {"text":"标题背后的半透明巨大数字或文字，最多4字","opacity":0.12,"scale":3.2},
         "layout": {"align":"center|left|right","vertical":"center|top|bottom","maxWidth":0.8,"scale":1,"rotate":0,"rows":8,"split":"none|horizontal|vertical|letters"},
         "motion": {"entrance":"wipe|stomp|slide|scale|scatter|typewriter|none","emphasis":["jitter","flash","skew","clip-split","outline","repeat-rows"],"easing":"expo-out|linear|back-out|snap","intensity":0.8},
         "background": {"type":"solid|gradient|particles|image|transparent","colorRole":"background|surface|primary|accent|muted","color":"#050505","accentColor":"#e7b84b"},
@@ -159,10 +169,18 @@ const systemPrompt = `你是一个短视频模板拆解师。
 要求：
 1. 不要只描述浅层风格，必须逐镜头拆 slots。
 2. sceneType 和 motion 枚举必须从上面选择，不要发明新值。
-3. startSec、durationSec、beatMarkers、flashCuts 可以估算，但必须顺序合理。
+3. startSec、durationSec、beatMarkers、flashCuts 可以估算，但必须顺序合理（系统检测到音频鼓点时会自动覆盖 beatMarkers）。
 4. 如果视频是强节奏文字快剪，应优先使用 intro-wipe、word-card、split-word、stomp-word、letter-scatter、outline-rows、logo-hold、blank-color。
 5. 输出 slots 数量建议 8 到 20 个。
-}`;
+6. 新场景的使用时机：
+   - 大标题下方有一行小字注释或 # 开头的副标题 -> title-sub，副标题放 subText。
+   - 句子里个别词颜色不同 -> emphasisWords + emphasisStyle=color；词带高亮色块底 -> emphasisStyle=highlight。
+   - 句架不动、只有某个词随节拍替换（如 人物->慢动作->缩放）-> word-swap，词组放 swapWords。
+   - 画面上多个随机角度、随机位置的拟声词（呼!、BOOM!）逐拍弹出 -> burst-words，词放 burstWords。
+   - 两个大字拉开、中间夹竖排小字 -> char-annotation，大字放 defaultText，竖排小字放 subText。
+   - 标题背后有半透明巨大数字/文字 -> 在该 slot 加 backdrop。
+   - 文字随节拍逐段补全 -> motion.entrance 用 typewriter。
+7. emphasisWords、swapWords 里的词必须是 defaultText 的原文子串或完整可替换短词，不要改写。`;
 
 export async function POST(request: Request) {
   try {
@@ -252,7 +270,7 @@ export async function POST(request: Request) {
         ...(parsed.style?.colors ?? {}),
       },
     });
-    const advancedTemplate = normalizeAdvancedTemplate(
+    let advancedTemplate = normalizeAdvancedTemplate(
       parsed.advancedTemplate ?? parsed,
       {
         ...defaultPlan.style,
@@ -273,6 +291,23 @@ export async function POST(request: Request) {
         source: "qwen-video",
       },
     );
+
+    // 本地鼓点检测：成功时覆盖千问估算的 beatMarkers，并把槽位边界吸附到节拍；
+    // 失败时静默保留估算值，不阻塞解析
+    const detectedBeats = extractedAudio?.filePath
+      ? await detectBeatsFromMedia(extractedAudio.filePath)
+      : undefined;
+    if (detectedBeats?.length) {
+      const snappedSlots = snapSlotsToBeats(advancedTemplate.slots, detectedBeats);
+      advancedTemplate = {
+        ...advancedTemplate,
+        slots: snappedSlots,
+        durationSec: getTemplateDuration(snappedSlots, advancedTemplate.durationSec),
+        beatMarkers: detectedBeats,
+        beatSource: "detected",
+        flashCuts: snappedSlots.slice(1).map((slot) => slot.startSec),
+      };
+    }
     const mergedStyle = styleOptionsSchema.partial().parse({
       ...style,
       ...(advancedTemplate.style ?? {}),

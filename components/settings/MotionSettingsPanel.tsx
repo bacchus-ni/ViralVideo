@@ -34,7 +34,28 @@ export const sceneTypeLabels: Record<SceneType, string> = {
   "logo-hold": "长停留",
   "blank-color": "撞色过渡",
   "stacked-title": "堆叠标题",
+  "title-sub": "标题副标题",
+  "word-swap": "原位换词",
+  "burst-words": "爆发词",
+  "char-annotation": "字间注释",
 };
+
+const emphasisStyleOptions: Array<{
+  label: string;
+  value: NonNullable<TemplateSlot["emphasisStyle"]>;
+}> = [
+  { label: "变色", value: "color" },
+  { label: "高亮块", value: "highlight" },
+  { label: "描边", value: "outline" },
+];
+
+// 逗号/顿号分隔的短词输入解析
+const parseWordList = (value: string, maxItems: number, maxLength: number) =>
+  value
+    .split(/[、,，\s]+/)
+    .map((word) => word.trim().slice(0, maxLength))
+    .filter(Boolean)
+    .slice(0, maxItems);
 
 const entranceLabels: Record<TemplateSlot["motion"]["entrance"], string> = {
   wipe: "擦入",
@@ -200,6 +221,95 @@ export const MotionSettingsPanel: React.FC<MotionSettingsPanelProps> = ({
             </select>
           </label>
         </div>
+        <div className="two-field-row">
+          <label className="settings-field">
+            <span>强调词样式</span>
+            <select
+              value={slot.emphasisStyle ?? "color"}
+              onChange={(event) =>
+                onSlotChange?.({
+                  emphasisStyle: event.target
+                    .value as TemplateSlot["emphasisStyle"],
+                })
+              }
+            >
+              {emphasisStyleOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="settings-field">
+            <span>幽灵背景字</span>
+            <input
+              key={`backdrop-${slot.id}`}
+              value={slot.backdrop?.text ?? ""}
+              maxLength={4}
+              placeholder="如 1"
+              onChange={(event) => {
+                const text = event.target.value.trim();
+                onSlotChange?.({
+                  backdrop: text
+                    ? {
+                        text,
+                        opacity: slot.backdrop?.opacity ?? 0.12,
+                        scale: slot.backdrop?.scale ?? 3.2,
+                      }
+                    : undefined,
+                });
+              }}
+            />
+          </label>
+        </div>
+        {slot.sceneType === "title-sub" || slot.sceneType === "char-annotation" ? (
+          <label className="settings-field">
+            <span>
+              {slot.sceneType === "title-sub" ? "副标题" : "竖排小字"}
+            </span>
+            <input
+              key={`subtext-${slot.id}`}
+              value={shot.subText ?? slot.subText ?? ""}
+              maxLength={24}
+              placeholder={
+                slot.sceneType === "title-sub"
+                  ? "如 #跟着鼓点切镜头"
+                  : "如 就像这样镜头"
+              }
+              onChange={(event) =>
+                onShotChange({ subText: event.target.value || undefined })
+              }
+            />
+          </label>
+        ) : null}
+        {slot.sceneType === "word-swap" ? (
+          <label className="settings-field">
+            <span>换词组 用逗号分隔，第一个词要在画面文字里</span>
+            <input
+              key={`swap-${slot.id}`}
+              defaultValue={(shot.swapWords ?? slot.swapWords ?? []).join("、")}
+              placeholder="如 人物、慢动作、缩放"
+              onChange={(event) => {
+                const words = parseWordList(event.target.value, 6, 8);
+                onShotChange({ swapWords: words.length ? words : undefined });
+              }}
+            />
+          </label>
+        ) : null}
+        {slot.sceneType === "burst-words" ? (
+          <label className="settings-field">
+            <span>爆发词 用逗号分隔，逐拍弹出</span>
+            <input
+              key={`burst-${slot.id}`}
+              defaultValue={(slot.burstWords ?? []).join("、")}
+              placeholder="如 呼!、呼!、哢!、BOOM!"
+              onChange={(event) => {
+                const words = parseWordList(event.target.value, 8, 6);
+                onSlotChange?.({ burstWords: words.length ? words : undefined });
+              }}
+            />
+          </label>
+        ) : null}
         <div className="emphasis-grid">
           {advancedMotionEmphasis.map((emphasis) => (
             <label key={emphasis} className="emphasis-toggle">

@@ -10,7 +10,13 @@ export const advancedSceneTypes = [
   "logo-hold",
   "blank-color",
   "stacked-title",
+  "title-sub",
+  "word-swap",
+  "burst-words",
+  "char-annotation",
 ] as const;
+
+export const emphasisStyles = ["color", "highlight", "outline"] as const;
 
 export const advancedMotionEntrances = [
   "wipe",
@@ -115,6 +121,12 @@ export const transitionSpecSchema = z.object({
   durationSec: z.number().min(0).max(1.5).optional(),
 });
 
+export const slotBackdropSchema = z.object({
+  text: z.string().min(1).max(4),
+  opacity: z.number().min(0).max(0.4).default(0.12),
+  scale: z.number().min(1).max(6).default(3.2),
+});
+
 export const templateSlotSchema = z.object({
   id: z.string().min(1),
   startSec: z.number().min(0),
@@ -127,6 +139,17 @@ export const templateSlotSchema = z.object({
   textColor: z.string().optional(),
   maxChars: z.number().min(1).max(80).optional(),
   visualDescription: z.string().max(160).optional(),
+  // 行内强调词：必须是 text 的原文子串才会生效
+  emphasisWords: z.array(z.string().min(1).max(12)).max(6).optional(),
+  emphasisStyle: z.enum(emphasisStyles).optional(),
+  // title-sub 的副标题 / char-annotation 的竖排小字
+  subText: z.string().max(24).optional(),
+  // word-swap 逐拍替换的词组
+  swapWords: z.array(z.string().min(1).max(8)).max(6).optional(),
+  // burst-words 逐拍弹出的爆发词
+  burstWords: z.array(z.string().min(1).max(6)).max(8).optional(),
+  // 幽灵背景大字，可叠加在任意场景后面
+  backdrop: slotBackdropSchema.optional(),
   layout: layoutSpecSchema.default({}),
   motion: motionSpecSchema.default({ entrance: "scale", emphasis: [] }),
   background: slotBackgroundSchema.default({ type: "solid" }),
@@ -145,6 +168,8 @@ export const advancedTemplateSchema = z.object({
   style: advancedTemplateStyleSchema.optional(),
   slots: z.array(templateSlotSchema).min(1).max(32),
   beatMarkers: z.array(z.number().min(0).max(60)).default([]),
+  // detected 表示来自本地音频鼓点检测，编辑分镜时不会被槽位起点覆盖
+  beatSource: z.enum(["estimated", "detected"]).default("estimated"),
   flashCuts: z.array(z.number().min(0).max(60)).default([]),
   audio: templateAudioSchema.optional(),
 });
@@ -160,6 +185,10 @@ export const storyboardShotSchema = z.object({
   startSec: z.number().min(0),
   durationSec: z.number().min(0.3).max(10),
   text: z.string().min(1).max(36),
+  // 高级槽位为 title-sub / char-annotation 时的副标题或竖排注释
+  subText: z.string().max(24).optional(),
+  // 高级槽位为 word-swap 时按内容生成的替换词组，优先于模板默认值
+  swapWords: z.array(z.string().min(1).max(8)).max(6).optional(),
   visualDescription: z.string().min(1).max(120),
   animation: z.enum(["fade", "slide-up", "pop", "zoom", "typewriter"]),
   advancedSettings: z
@@ -207,6 +236,7 @@ export type StyleOptions = z.infer<typeof styleOptionsSchema>;
 export type AdvancedTemplateSpec = z.infer<typeof advancedTemplateSchema>;
 export type TemplateSlot = z.infer<typeof templateSlotSchema>;
 export type SceneType = z.infer<typeof templateSlotSchema>["sceneType"];
+export type EmphasisStyle = (typeof emphasisStyles)[number];
 export type MotionSpec = z.infer<typeof motionSpecSchema>;
 export type ScriptLine = z.infer<typeof scriptLineSchema>;
 export type StoryboardShot = z.infer<typeof storyboardShotSchema>;

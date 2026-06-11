@@ -36,14 +36,27 @@ const mergeAdvancedStyle = (
   aspectRatio: baseStyle.aspectRatio ?? advancedTemplate?.aspectRatio ?? "9:16",
 });
 
-const getSlotText = (
-  plan: VideoPlan,
-  slotIndex: number,
-  fallback: string,
-) =>
-  plan.storyboard[slotIndex]?.text ||
-  plan.script[slotIndex]?.text ||
-  fallback;
+// 文案行的 emphasis、分镜的 subText/swapWords 一起传给场景，
+// 渲染端再用槽位默认值兜底
+const getSlotContent = (plan: VideoPlan, slotIndex: number, fallback: string) => {
+  const shot = plan.storyboard[slotIndex];
+  const line = plan.script[slotIndex];
+  return {
+    text: shot?.text || line?.text || fallback,
+    emphasis: line?.emphasis ?? [],
+    subText: shot?.subText,
+    swapWords: shot?.swapWords,
+  };
+};
+
+// 把模板节拍切进槽位，转成相对槽位起点的帧号
+const getSlotBeatFrames = (beatMarkers: number[], slot: { startSec: number; durationSec: number }) =>
+  beatMarkers
+    .filter(
+      (beat) =>
+        beat >= slot.startSec - 0.001 && beat < slot.startSec + slot.durationSec,
+    )
+    .map((beat) => Math.max(0, Math.round((beat - slot.startSec) * VIDEO_FPS)));
 
 const FlashOverlay: React.FC<{
   cuts: number[];
@@ -110,6 +123,7 @@ export const KineticTextComposition: React.FC<KineticTextCompositionProps> = ({
 
       {slots.map((slot, index) => {
         const durationFrames = Math.max(1, Math.round(slot.durationSec * VIDEO_FPS));
+        const content = getSlotContent(plan, index, slot.defaultText);
 
         return (
           <Sequence
@@ -120,7 +134,11 @@ export const KineticTextComposition: React.FC<KineticTextCompositionProps> = ({
           >
             <KineticTextScene
               slot={slot}
-              text={getSlotText(plan, index, slot.defaultText)}
+              text={content.text}
+              emphasis={content.emphasis}
+              subText={content.subText}
+              swapWords={content.swapWords}
+              beatFrames={getSlotBeatFrames(template?.beatMarkers ?? [], slot)}
               styleOptions={style}
               durationFrames={durationFrames}
             />

@@ -3,6 +3,7 @@ import {
   advancedMotionEntrances,
   advancedSceneTypes,
   advancedTemplateSchema,
+  emphasisStyles,
   type AdvancedTemplateSpec,
   type SceneType,
   type StyleOptions,
@@ -85,12 +86,43 @@ const pickEnum = <T extends readonly string[]>(
 const normalizeText = (value: unknown, fallback: string, maxChars = 36) =>
   pickString(value, fallback)?.replace(/\s+/g, " ").slice(0, maxChars) ?? fallback;
 
+// swapWords / burstWords / emphasisWords 这类短词数组的通用归一化
+const pickStringArray = (
+  value: unknown,
+  maxItems: number,
+  maxLength: number,
+): string[] | undefined => {
+  const source = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[、,，\s]+/)
+      : [];
+  const items = source
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim().slice(0, maxLength))
+    .filter(Boolean)
+    .slice(0, maxItems);
+  return items.length ? items : undefined;
+};
+
+const normalizeBackdrop = (value: unknown): TemplateSlot["backdrop"] => {
+  if (!isRecord(value)) return undefined;
+  const text = pickString(value.text)?.slice(0, 4);
+  if (!text) return undefined;
+  return {
+    text,
+    opacity: pickClampedNumber(0, 0.4, 0.12, value.opacity) ?? 0.12,
+    scale: pickClampedNumber(1, 6, 3.2, value.scale) ?? 3.2,
+  };
+};
+
 const minReadableMaxChars = (
   sceneType: SceneType,
   textRole: TemplateSlot["textRole"],
 ) => {
   if (sceneType === "blank-color" || textRole === "filler") return 2;
-  if (sceneType === "letter-scatter") return 4;
+  if (sceneType === "letter-scatter" || sceneType === "char-annotation") return 4;
+  if (sceneType === "burst-words") return 4;
   if (sceneType === "logo-hold" || textRole === "brand" || textRole === "ending") {
     return 10;
   }
@@ -256,6 +288,20 @@ export const normalizeAdvancedTemplate = (
             item.visual,
             item.note,
           ) ?? `${sceneType} 文字动效`,
+        emphasisWords: pickStringArray(
+          item.emphasisWords ?? item.accentWords,
+          6,
+          12,
+        ),
+        emphasisStyle:
+          typeof item.emphasisStyle === "string" &&
+          (emphasisStyles as readonly string[]).includes(item.emphasisStyle)
+            ? (item.emphasisStyle as TemplateSlot["emphasisStyle"])
+            : undefined,
+        subText: pickString(item.subText, item.subtitle)?.slice(0, 24),
+        swapWords: pickStringArray(item.swapWords, 6, 8),
+        burstWords: pickStringArray(item.burstWords, 8, 6),
+        backdrop: normalizeBackdrop(item.backdrop),
         layout: {
           align: pickEnum(
             ["center", "left", "right"] as const,
@@ -435,6 +481,11 @@ export const normalizeAdvancedTemplate = (
           .filter((item): item is number => typeof item === "number")
           .slice(0, 80)
       : slots.map((slot) => slot.startSec),
+    beatSource: pickEnum(
+      ["estimated", "detected"] as const,
+      raw.beatSource,
+      "estimated",
+    ),
     flashCuts: Array.isArray(raw.flashCuts)
       ? raw.flashCuts
           .map((item) => pickNumber(item))
@@ -451,14 +502,67 @@ export const getSlotReadableLimit = (slot: TemplateSlot) => {
   if (slot.textRole === "filler" || slot.sceneType === "blank-color") {
     return Math.max(4, Math.min(36, slot.maxChars ?? 4));
   }
+  // 大字夹注场景只显示 2~4 个巨字，文案上限同步收紧
+  if (slot.sceneType === "char-annotation") {
+    return Math.max(2, Math.min(6, slot.maxChars ?? 4));
+  }
 
   return Math.max(12, Math.min(36, slot.maxChars ?? 36));
 };
 
+// 把槽位边界吸附到检测出的鼓点上：每个槽位的结束点找最近的节拍，
+// 距离在容差内才吸附，避免节拍稀疏时把槽位拉得过长或过短
+export const snapSlotsToBeats = (
+  slots: TemplateSlot[],
+  beats: number[],
+  toleranceSec = 0.45,
+) => {
+  if (beats.length < 2) return reflowTemplateSlots(slots);
+  const sorted = [...beats].sort((a, b) => a - b);
+  let cursor = 0;
+
+  return slots.map((slot, index) => {
+    const targetEnd = cursor + slot.durationSec;
+    let snappedEnd = targetEnd;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const beat of sorted) {
+      if (beat <= cursor + 0.25) continue;
+      const distance = Math.abs(beat - targetEnd);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        snappedEnd = beat;
+      }
+    }
+    const end = bestDistance <= toleranceSec ? snappedEnd : targetEnd;
+    const durationSec = Number(
+      Math.max(0.3, Math.min(10, end - cursor)).toFixed(2),
+    );
+    const next = {
+      ...slot,
+      id: slot.id || `slot-${index + 1}`,
+      startSec: Number(cursor.toFixed(2)),
+      durationSec,
+    };
+    cursor += durationSec;
+    return next;
+  });
+};
+
 export const summarizeAdvancedTemplate = (template: AdvancedTemplateSpec) =>
   template.slots
-    .map(
-      (slot, index) =>
-        `${index + 1}. ${slot.sceneType} / ${slot.textRole} / ${slot.durationSec}s / ${slot.motion.entrance} / 最多${getSlotReadableLimit(slot)}字 / 默认文字：${slot.defaultText}`,
-    )
+    .map((slot, index) => {
+      const extras: string[] = [];
+      if (slot.sceneType === "title-sub") {
+        extras.push("需要 subText 副标题(≤24字)");
+      }
+      if (slot.sceneType === "char-annotation") {
+        extras.push("text 为2~4个大字, subText 为竖排小注(≤24字)");
+      }
+      if (slot.sceneType === "word-swap") {
+        extras.push(
+          `需要 swapWords 2~6个短词, 第一个词要出现在 text 里${slot.swapWords?.length ? `, 默认：${slot.swapWords.join("/")}` : ""}`,
+        );
+      }
+      return `${index + 1}. ${slot.sceneType} / ${slot.textRole} / ${slot.durationSec}s / ${slot.motion.entrance} / 最多${getSlotReadableLimit(slot)}字 / 默认文字：${slot.defaultText}${extras.length ? ` / ${extras.join("；")}` : ""}`;
+    })
     .join("\n");

@@ -50,6 +50,12 @@ type SlotSeed = {
   rows?: number;
   split?: TemplateSlot["layout"]["split"];
   rotate?: number;
+  emphasisWords?: string[];
+  emphasisStyle?: TemplateSlot["emphasisStyle"];
+  subText?: string;
+  swapWords?: string[];
+  burstWords?: string[];
+  backdrop?: TemplateSlot["backdrop"];
   description: string;
 };
 
@@ -63,10 +69,18 @@ const makeKineticSlot = (seed: SlotSeed, index: number): TemplateSlot => ({
   maxChars:
     seed.sceneType === "letter-scatter"
       ? 6
-      : seed.sceneType === "logo-hold"
-        ? 16
-        : 10,
+      : seed.sceneType === "char-annotation"
+        ? 4
+        : seed.sceneType === "logo-hold"
+          ? 16
+          : 10,
   visualDescription: seed.description,
+  emphasisWords: seed.emphasisWords,
+  emphasisStyle: seed.emphasisStyle,
+  subText: seed.subText,
+  swapWords: seed.swapWords,
+  burstWords: seed.burstWords,
+  backdrop: seed.backdrop,
   layout: {
     align: "center",
     vertical: "center",
@@ -130,12 +144,14 @@ const kineticSlotSeeds: SlotSeed[] = [
       description: "白色底快速擦入，标题压到画面中心",
     },
     {
-      sceneType: "word-card",
+      sceneType: "title-sub",
       durationSec: 0.52,
       defaultText: "观点要狠",
       role: "keyword",
       background: { type: "solid", colorRole: "surface" },
-      description: "紫色背景，绿色大字撞击入场",
+      subText: "#把每个字都砸在节拍上",
+      emphasisWords: ["狠"],
+      description: "紫色背景，大标题撞击入场，小副标题延迟跟进",
     },
     {
       sceneType: "word-card",
@@ -203,7 +219,8 @@ const kineticSlotSeeds: SlotSeed[] = [
       defaultText: "第二轮反转",
       role: "hook",
       background: { type: "solid", color: "#f9f9f6", accentColor: "#ec004f" },
-      description: "白底擦入并叠加强调色块，进入第二轮节奏",
+      backdrop: { text: "2", opacity: 0.12, scale: 3.2 },
+      description: "白底擦入并叠加强调色块，背后压半透明大数字2",
     },
     {
       sceneType: "word-card",
@@ -214,13 +231,14 @@ const kineticSlotSeeds: SlotSeed[] = [
       description: "洋红背景，白色大字撞击",
     },
     {
-      sceneType: "word-card",
+      sceneType: "word-swap",
       durationSec: 0.52,
       defaultText: "换一种说法",
       role: "point",
       background: { type: "solid", color: "#f9f9f6" },
       entrance: "stomp",
-      description: "白色背景，洋红文字快速稳定",
+      swapWords: ["说法", "节奏", "角度"],
+      description: "句架不动，强调位的词随节拍原位替换",
     },
     {
       sceneType: "split-word",
@@ -231,13 +249,13 @@ const kineticSlotSeeds: SlotSeed[] = [
       description: "洋红背景文字裁切分裂",
     },
     {
-      sceneType: "stomp-word",
+      sceneType: "burst-words",
       durationSec: 0.56,
       defaultText: "压住情绪",
       role: "keyword",
       background: { type: "solid", color: "#ec004f" },
-      rotate: -3,
-      description: "斜体大字二次冲击",
+      burstWords: ["呼!", "呼!", "哢!", "BOOM!"],
+      description: "拟声爆发词随机角度逐拍弹出",
     },
     {
       sceneType: "letter-scatter",
@@ -287,6 +305,7 @@ const kineticMixcutTemplate: AdvancedTemplateSpec = {
   },
   slots: kineticSlots,
   beatMarkers: kineticSlots.map((slot) => slot.startSec),
+  beatSource: "estimated",
   flashCuts: kineticSlots.slice(1).map((slot) => slot.startSec),
   audio: {
     url: "/music/viral-quote.wav",

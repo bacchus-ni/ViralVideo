@@ -47,6 +47,10 @@ const sceneAnimationMap: Record<SceneType, StoryboardShot["animation"]> = {
   "logo-hold": "zoom",
   "blank-color": "fade",
   "stacked-title": "slide-up",
+  "title-sub": "pop",
+  "word-swap": "pop",
+  "burst-words": "pop",
+  "char-annotation": "zoom",
 };
 
 const systemPrompt = `你是一个短视频纯文本混剪策划助手。
@@ -69,7 +73,10 @@ const systemPrompt = `你是一个短视频纯文本混剪策划助手。
 14. storyboard 必须是数组，每个元素都必须有 id，例如 shot-1、shot-2。
 15. 如果用户提供高级模板槽位，script 和 storyboard 数量要与槽位数量一致，但内容仍要来自 narrativeDraft 的连续语义。
 16. 禁止输出单字、残词、孤立关键词或名词堆砌；除转场占位外，每条 text 应是 6 到 18 个中文字符的完整短句。
-17. 如果用户需求是科普、讲解、介绍类主题，文案必须形成清晰的信息递进，而不是只列名词。`;
+17. 如果用户需求是科普、讲解、介绍类主题，文案必须形成清晰的信息递进，而不是只列名词。
+18. emphasis 数组里的词必须是该行 text 的原文连续子串，不能改写、不能加字；每行 0 到 2 个，选最值得变色强调的词。
+19. 高级模板槽位标注「需要 subText」时，对应 storyboard 元素必须输出 subText 字段（小副标题或竖排注释，不超过 24 字）。
+20. 高级模板槽位标注「需要 swapWords」时，对应 storyboard 元素必须输出 swapWords 数组（2 到 6 个与主题相关的短词，第一个词必须出现在该镜头 text 里）。`;
 
 const extractJson = (content: string) => {
   const trimmed = content.trim();
@@ -420,11 +427,15 @@ const normalizeScript = (rawScript: unknown, userPrompt: string) => {
     merged.push({ id: `line-${merged.length + 1}`, text, emphasis: [] });
   }
 
-  return merged.slice(0, 24).map((line, index) => ({
-    id: line.id || `line-${index + 1}`,
-    text: line.text || padTexts[index % padTexts.length],
-    emphasis: line.emphasis ?? [],
-  }));
+  // emphasis 必须是 text 的原文子串，否则渲染端富文本分词无法命中
+  return merged.slice(0, 24).map((line, index) => {
+    const text = line.text || padTexts[index % padTexts.length];
+    return {
+      id: line.id || `line-${index + 1}`,
+      text,
+      emphasis: (line.emphasis ?? []).filter((word) => text.includes(word)),
+    };
+  });
 };
 
 const normalizeStoryboard = (
@@ -462,11 +473,20 @@ const normalizeStoryboard = (
         fallbackShot.durationSec,
         defaultDuration,
       );
+      const swapWords = Array.isArray(raw.swapWords)
+        ? raw.swapWords
+            .filter((word): word is string => typeof word === "string")
+            .map((word) => word.trim().slice(0, 8))
+            .filter(Boolean)
+            .slice(0, 6)
+        : undefined;
       const shot = {
         id: pickString(raw.id) ?? `shot-${index + 1}`,
         startSec: pickNumber(raw.startSec, raw.start, cursor) ?? cursor,
         durationSec: Math.max(0.3, Math.min(10, durationSec ?? defaultDuration)),
         text: cleanLine(text),
+        subText: pickString(raw.subText, raw.subtitle)?.slice(0, 24),
+        swapWords: swapWords?.length ? swapWords : undefined,
         visualDescription:
           pickString(
             raw.visualDescription,
@@ -492,6 +512,8 @@ const normalizeStoryboard = (
     normalized.push({
       ...fallbackShot,
       id: `shot-${normalized.length + 1}`,
+      subText: fallbackShot.subText,
+      swapWords: fallbackShot.swapWords,
     });
   }
 
@@ -528,15 +550,19 @@ const alignPlanToAdvancedTemplate = (
       getSlotReadableLimit(slot),
     );
 
+    const finalText =
+      text || readableFallbackTexts[index] || slot.defaultText.slice(0, 36);
+    // 行级 emphasis 优先，槽位默认强调词兜底；都必须是最终文本的子串
+    const emphasis = (
+      existingLine?.emphasis?.length
+        ? existingLine.emphasis
+        : slot.emphasisWords ?? []
+    ).filter((word) => finalText.includes(word));
+
     return {
       id: existingLine?.id || `line-${index + 1}`,
-      text: text || readableFallbackTexts[index] || slot.defaultText.slice(0, 36),
-      emphasis:
-        existingLine?.emphasis?.length
-          ? existingLine.emphasis
-          : slot.textRole === "keyword" || slot.textRole === "hook"
-            ? [text || slot.defaultText.slice(0, 12)]
-            : [],
+      text: finalText,
+      emphasis,
     };
   });
   const storyboard = slots.map((slot, index) => {
@@ -548,6 +574,10 @@ const alignPlanToAdvancedTemplate = (
       startSec: slot.startSec,
       durationSec: slot.durationSec,
       text,
+      subText: existingShot?.subText ?? slot.subText,
+      swapWords: existingShot?.swapWords?.length
+        ? existingShot.swapWords
+        : slot.swapWords,
       visualDescription:
         existingShot?.visualDescription ||
         slot.visualDescription ||
@@ -777,7 +807,8 @@ resolution: 720p | 1080p | 2k | custom
     {"id": "line-1", "text": "使用 screenLines 中的完整短句", "emphasis": ["关键词"]}
   ],
   "storyboard": [
-    {"id": "shot-1", "startSec": 0, "durationSec": 2, "text": "与 script 对应的完整短句", "visualDescription": "背景和文字入场说明", "animation": "pop"}
+    {"id": "shot-1", "startSec": 0, "durationSec": 2, "text": "与 script 对应的完整短句", "visualDescription": "背景和文字入场说明", "animation": "pop"},
+    {"id": "shot-2", "startSec": 2, "durationSec": 2, "text": "槽位需要时才加可选字段", "subText": "title-sub 槽位的副标题", "swapWords": ["word-swap 槽位的换词"], "visualDescription": "说明", "animation": "pop"}
   ],
   "style": ${JSON.stringify({ ...template.defaultStyle, ...(request.style ?? {}) })}
 }`;
